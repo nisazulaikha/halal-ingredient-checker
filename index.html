@@ -584,10 +584,10 @@
         // Configuration with multiple fallback options
         const CONFIG = {
             apiEndpoints: {
-                primary: 'https://c14a-27-125-240-61.ngrok-free.app/ingredient-check',
+                primary: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/ingredient-check',
                 fallback: 'https://your-cors-proxy.com/api',
                 proxyPrefix: 'https://cors-anywhere.herokuapp.com/',
-                responseUrl: 'https://242f-27-125-240-61.ngrok-free.app/response'
+                responseUrl: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/response-webhook/response/:chatId'
             },
             useMockData: true, // Default to mock data to avoid CORS issues
             notificationThresholdDays: 30,
