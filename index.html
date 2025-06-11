@@ -114,6 +114,7 @@
             display: flex;
             gap: 10px;
             margin-bottom: 25px;
+            flex-wrap: wrap;
         }
 
         button {
@@ -127,6 +128,7 @@
             font-size: 14px;
             position: relative;
             overflow: hidden;
+            min-width: 120px;
         }
 
         .check-btn {
@@ -136,6 +138,16 @@
 
         .clear-btn {
             background: linear-gradient(45deg, #ff6b6b, #feca57);
+            color: white;
+        }
+
+        .export-btn {
+            background: linear-gradient(45deg, #17a2b8, #20c997);
+            color: white;
+        }
+
+        .debug-btn {
+            background: #6c757d;
             color: white;
         }
 
@@ -318,26 +330,6 @@
             transition: all 0.3s ease;
         }
 
-        .notification-permission {
-            background: linear-gradient(45deg, #ffd700, #ffed4a);
-            color: #333;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-weight: 600;
-        }
-
-        .notification-permission button {
-            margin-top: 10px;
-            padding: 8px 16px;
-            background: #333;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
         .config-section {
             background: #e3f2fd;
             padding: 15px;
@@ -349,6 +341,7 @@
         .config-section h3 {
             margin-bottom: 10px;
             color: #1976d2;
+            font-size: 16px;
         }
 
         .config-toggle {
@@ -364,6 +357,40 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 12px;
+            font-family: monospace;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-testing {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
         }
 
         /* Mobile Responsiveness */
@@ -495,6 +522,14 @@
                 opacity: 1;
             }
         }
+
+        .test-connection-btn {
+            background: linear-gradient(45deg, #6f42c1, #e83e8c);
+            color: white;
+            font-size: 12px;
+            padding: 6px 12px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -508,56 +543,65 @@
 
             <!-- Configuration Section -->
             <div class="config-section">
-                <h3>API Configuration</h3>
+                <h3>⚙️ API Configuration</h3>
                 <div class="config-toggle">
-                    <input type="checkbox" id="useMockData" checked>
-                    <label for="useMockData">Use Mock Data (disable for real API)</label>
+                    <input type="checkbox" id="useMockData">
+                    <label for="useMockData">Use Mock Data (for testing)</label>
                 </div>
+                
                 <div style="margin-bottom: 10px;">
-                    <label for="apiUrl" style="font-size: 12px;">API URL:</label>
+                    <label for="apiUrl" style="font-size: 12px;">Ingredient Check API:</label>
                     <input type="text" id="apiUrl" class="config-input" 
-                           placeholder="https://your-backend-url.com/api" 
-                           value="https://c14a-27-125-240-61.ngrok-free.app/webhook/ingredient-check">
+                        placeholder="https://your-ngrok-url.ngrok-free.app/webhook/ingredient-check" 
+                        value="https://fb62-27-125-241-114.ngrok-free.app/webhook/ingredient-check">
                 </div>
+                
                 <div style="margin-bottom: 10px;">
-                    <label for="responseUrl" style="font-size: 12px;">Response URL:</label>
+                    <label for="responseUrl" style="font-size: 12px;">Response Webhook URL:</label>
                     <input type="text" id="responseUrl" class="config-input" 
-                           placeholder="https://your-backend-url.com/api/response" 
-                           value="https://c14a-27-125-240-61.ngrok-free.app/webhook/response-webhook/response">
+                        placeholder="https://your-ngrok-url.ngrok-free.app/webhook/[id]/response" 
+                        value="https://fb62-27-125-241-114.ngrok-free.app/webhook/f3f51804-fafc-4103-bff9-4dc5ab97ff2f/response">
                 </div>
-                <div class="alert alert-warning" id="corsAlert">
-                    <strong>CORS Issue Detected:</strong> Currently using mock data due to CORS restrictions. 
-                    To fix: Configure CORS headers on your backend or use a proxy.
+                
+                <div style="margin-bottom: 10px;">
+                    <label for="chatResponseUrl" style="font-size: 12px;">Chat Response URL:</label>
+                    <input type="text" id="chatResponseUrl" class="config-input" 
+                        placeholder="https://your-ngrok-url.ngrok-free.app/webhook/[id]/response/chat" 
+                        value="https://fb62-27-125-241-114.ngrok-free.app/webhook/bb06b7cf-8a49-4f1e-ba44-ca85271eeaf6/response/chat">
+                </div>
+                
+                <button class="test-connection-btn" onclick="testConnection()">
+                    🔗 Test Connection
+                </button>
+                
+                <div id="connectionStatus" class="connection-status status-disconnected">
+                    <span class="status-indicator"></span>
+                    <span>Not Connected - Click Test Connection</span>
                 </div>
             </div>
 
             <!-- Debug Panel -->
             <div class="debug-panel" id="debugPanel" style="display: none;">
-                <h4>Debug Information</h4>
+                <h4>🔍 Debug Information</h4>
                 <div class="debug-log" id="debugLog"></div>
                 <button onclick="clearDebugLog()" style="margin-top: 10px; padding: 5px 10px; font-size: 11px;">Clear Log</button>
-            </div>
-
-            <div id="notificationPermission" class="notification-permission" style="display: none;">
-                Enable notifications to get alerts about expiring certificates!
-                <br>
-                <button onclick="requestNotificationPermission()">Enable Notifications</button>
             </div>
 
             <div class="input-section">
                 <label for="ingredientInput">Enter ingredients (one per line):</label>
                 <textarea 
                     id="ingredientInput" 
-                    placeholder="Enter ingredients here, for example:&#10;Corn Starch&#10;Soy Lecithin&#10;Vanilla Extract&#10;Citric Acid&#10;Xanthan Gum"
+                    placeholder="Enter ingredients here, for example:&#10;Corn Starch&#10;Soy Lecithin&#10;Vanilla Extract&#10;Citric Acid&#10;Xanthan Gum&#10;Gelatin&#10;Lecithin&#10;Mono- and Diglycerides"
                 ></textarea>
             </div>
 
             <div class="button-group">
                 <button class="check-btn" onclick="checkIngredients()">
-                    <span id="checkBtnText">Check Ingredients</span>
+                    <span id="checkBtnText">✅ Check Ingredients</span>
                 </button>
-                <button class="clear-btn" onclick="clearResults()">Clear All</button>
-                <button onclick="toggleDebugPanel()" style="background: #6c757d; color: white;">Debug</button>
+                <button class="clear-btn" onclick="clearResults()">🗑️ Clear All</button>
+                <button class="export-btn" onclick="exportResults()">📥 Export</button>
+                <button class="debug-btn" onclick="toggleDebugPanel()">🔧 Debug</button>
             </div>
 
             <div class="stats-section" id="statsSection" style="display: none;">
@@ -582,23 +626,23 @@
             <div class="results-section">
                 <div class="results-table">
                     <table id="resultsTable" class="table">
-               <thead>
-              <tr>
-                  <th>Ingredient</th>
-                  <th>Status</th>
-                  <th>Expiry Date</th>
-                  <th>Supplier</th>
-                  <th>Certificate ID</th>
-             </tr>
-             </thead>
-            <tbody id="resultsBody">
-         <tr>
-            <td colspan="5" class="empty-state">
-                Enter ingredients above and click "Check Ingredients" to see results
-            </td>
-        </tr>
-    </tbody>
-</table>
+                        <thead>
+                            <tr>
+                                <th>Ingredient</th>
+                                <th>Status</th>
+                                <th>Expiry Date</th>
+                                <th>Supplier</th>
+                                <th>Certificate ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    Enter ingredients above and click "Check Ingredients" to see results
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -613,7 +657,7 @@
             <div class="chat-messages" id="chatMessages">
                 <div class="message message-ai">
                     <div class="message-content">
-                        Hello! I'm your Halal AI Assistant. I can help you with questions about halal ingredients, certifications, and food regulations. How can I assist you today?
+                        🌙 Assalamu Alaikum! I'm your Halal AI Assistant. I can help you with questions about halal ingredients, certifications, and Islamic food regulations. Ask me anything about halal compliance!
                     </div>
                 </div>
             </div>
@@ -623,7 +667,7 @@
                     type="text" 
                     class="chat-input" 
                     id="chatInput" 
-                    placeholder="Ask me about halal ingredients..."
+                    placeholder="Ask about halal ingredients, certifications..."
                     onkeypress="handleChatKeyPress(event)"
                 >
                 <button class="send-btn" onclick="sendMessage()">
@@ -634,61 +678,26 @@
     </div>
 
     <script>
-        // Configuration with multiple fallback options
+        // Enhanced Configuration
         const CONFIG = {
             apiEndpoints: {
-                primary: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/ingredient-check',
-                fallback: 'https://your-cors-proxy.com/api',
-                proxyPrefix: 'https://cors-anywhere.herokuapp.com/',
-                responseUrl: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/response-webhook/response'
+                primary: 'https://fb62-27-125-241-114.ngrok-free.app/webhook/ingredient-check',
+                responseUrl: 'https://fb62-27-125-241-114.ngrok-free.app/webhook/f3f51804-fafc-4103-bff9-4dc5ab97ff2f/response',
+                chatResponseUrl: 'https://fb62-27-125-241-114.ngrok-free.app/webhook/bb06b7cf-8a49-4f1e-ba44-ca85271eeaf6/response/chat'
             },
-            useMockData: true, // Default to mock data to avoid CORS issues
+            useMockData: false, // Default to real API
             notificationThresholdDays: 30,
             chatId: 'session_' + Date.now(),
             polling: {
-                maxAttempts: 15,
-                initialDelay: 1000,
-                backoffMultiplier: 1.2,
-                maxDelay: 5000
-            }
+                maxAttempts: 20,
+                initialDelay: 2000,
+                backoffMultiplier: 1.1,
+                maxDelay: 8000
+            },
+            connectionTested: false
         };
 
-        // Debug logging
-        let debugLog = [];
-        
-        function log(message, level = 'info') {
-            const timestamp = new Date().toISOString();
-            const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-            debugLog.push(logEntry);
-            console.log(logEntry);
-            
-            // Keep only last 100 entries
-            if (debugLog.length > 100) {
-                debugLog = debugLog.slice(-100);
-            }
-            
-            updateDebugPanel();
-        }
-
-        function updateDebugPanel() {
-            const debugLogElement = document.getElementById('debugLog');
-            if (debugLogElement) {
-                debugLogElement.textContent = debugLog.join('\n');
-                debugLogElement.scrollTop = debugLogElement.scrollHeight;
-            }
-        }
-
-        function toggleDebugPanel() {
-            const panel = document.getElementById('debugPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-
-        function clearDebugLog() {
-            debugLog = [];
-            updateDebugPanel();
-        }
-
-        // Mock data for testing
+        // Enhanced Mock Data
         const MOCK_INGREDIENT_DATA = {
             'corn starch': {
                 status: 'Certified',
@@ -721,18 +730,103 @@
                 certificateId: 'JAKIM-2024-008'
             },
             'lecithin': {
-                status: 'Certified',
-                expiryDate: '2025-09-30',
+                status: 'Expiring',
+                expiryDate: '2025-07-01',
                 supplier: 'Natural Ingredients Co.',
                 certificateId: 'JAKIM-2024-012'
             },
-            'gellan gum': {
+            'gelatin': {
+                status: 'Not Found',
+                expiryDate: 'N/A',
+                supplier: 'Unknown',
+                certificateId: 'N/A'
+            },
+            'mono- and diglycerides': {
                 status: 'Certified',
-                expiryDate: '2025-11-15',
-                supplier: 'Bio Gums Malaysia',
-                certificateId: 'JAKIM-2024-018'
+                expiryDate: '2025-10-15',
+                supplier: 'Halal Emulsifiers Sdn Bhd',
+                certificateId: 'JAKIM-2024-025'
             }
         };
+
+        // Debug logging
+        let debugLog = [];
+        
+        function log(message, level = 'info') {
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+            debugLog.push(logEntry);
+            console.log(logEntry);
+            
+            if (debugLog.length > 100) {
+                debugLog = debugLog.slice(-100);
+            }
+            
+            updateDebugPanel();
+        }
+
+        function updateDebugPanel() {
+            const debugLogElement = document.getElementById('debugLog');
+            if (debugLogElement) {
+                debugLogElement.textContent = debugLog.join('\n');
+                debugLogElement.scrollTop = debugLogElement.scrollHeight;
+            }
+        }
+
+        function toggleDebugPanel() {
+            const panel = document.getElementById('debugPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function clearDebugLog() {
+            debugLog = [];
+            updateDebugPanel();
+        }
+
+        // Connection testing
+        async function testConnection() {
+            const statusEl = document.getElementById('connectionStatus');
+            const testBtn = document.querySelector('.test-connection-btn');
+            
+            statusEl.className = 'connection-status status-testing';
+            statusEl.innerHTML = '<span class="status-indicator"></span><span>Testing connection...</span>';
+            testBtn.disabled = true;
+            testBtn.textContent = '🔄 Testing...';
+            
+            log('Testing connection to API endpoints...');
+            
+            try {
+                updateConfigFromUI();
+                
+                // Test basic connectivity
+                const response = await fetch(CONFIG.apiEndpoints.primary, {
+                    method: 'HEAD',
+                    mode: 'cors',
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                });
+                
+                if (response.ok || response.status === 405) { // 405 is OK for HEAD requests
+                    CONFIG.connectionTested = true;
+                    statusEl.className = 'connection-status status-connected';
+                    statusEl.innerHTML = '<span class="status-indicator"></span><span>✅ Connected Successfully</span>';
+                    log('Connection test successful');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+            } catch (error) {
+                log(`Connection test failed: ${error.message}`, 'error');
+                statusEl.className = 'connection-status status-disconnected';
+                statusEl.innerHTML = '<span class="status-indicator"></span><span>❌ Connection Failed</span>';
+                
+                showAlert('Connection test failed. Check your ngrok URL and n8n workflow.', 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = '🔗 Test Connection';
+            }
+        }
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
@@ -740,14 +834,11 @@
         });
 
         function initializeApp() {
-            log('Initializing Halal Ingredient Checker...');
-            checkNotificationPermission();
+            log('Initializing Enhanced Halal Ingredient Checker...');
             setupConfigurationHandlers();
             initializeChat();
             autoSaveInput();
-            setupServiceWorker();
             
-            // Set initial configuration
             updateConfigFromUI();
             log('App initialized successfully');
         }
@@ -756,270 +847,70 @@
             const mockDataCheckbox = document.getElementById('useMockData');
             const apiUrlInput = document.getElementById('apiUrl');
             const responseUrlInput = document.getElementById('responseUrl');
+            const chatResponseUrlInput = document.getElementById('chatResponseUrl');
             
             mockDataCheckbox.addEventListener('change', function() {
                 CONFIG.useMockData = this.checked;
                 log(`Mock data mode: ${this.checked ? 'enabled' : 'disabled'}`);
-                updateCorsAlert();
+                updateConnectionStatus();
             });
             
-            apiUrlInput.addEventListener('input', function() {
-                CONFIG.apiEndpoints.primary = this.value;
-                log(`API URL updated: ${this.value}`);
+            [apiUrlInput, responseUrlInput, chatResponseUrlInput].forEach(input => {
+                input.addEventListener('input', function() {
+                    CONFIG.connectionTested = false;
+                    updateConnectionStatus();
+                });
             });
-
-            responseUrlInput.addEventListener('input', function() {
-                CONFIG.apiEndpoints.responseUrl = this.value;
-                log(`Response URL updated: ${this.value}`);
-            });
-            
-            updateCorsAlert();
         }
 
         function updateConfigFromUI() {
             const mockDataCheckbox = document.getElementById('useMockData');
             const apiUrlInput = document.getElementById('apiUrl');
             const responseUrlInput = document.getElementById('responseUrl');
+            const chatResponseUrlInput = document.getElementById('chatResponseUrl');
             
             CONFIG.useMockData = mockDataCheckbox.checked;
-            CONFIG.apiEndpoints.primary = apiUrlInput.value;
-            CONFIG.apiEndpoints.responseUrl = responseUrlInput.value;
+            CONFIG.apiEndpoints.primary = apiUrlInput.value.trim();
+            CONFIG.apiEndpoints.responseUrl = responseUrlInput.value.trim();
+            CONFIG.apiEndpoints.chatResponseUrl = chatResponseUrlInput.value.trim();
         }
 
-        function updateCorsAlert() {
-            const corsAlert = document.getElementById('corsAlert');
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connectionStatus');
+            
             if (CONFIG.useMockData) {
-                corsAlert.innerHTML = `
-                    <strong>Mock Mode:</strong> Using sample data. Uncheck "Use Mock Data" to connect to your API.
-                    <br><small>Make sure your backend has CORS headers configured properly.</small>
-                `;
-                corsAlert.className = 'alert alert-warning';
-            } else {
-                corsAlert.innerHTML = `
-                    <strong>Live Mode:</strong> Attempting to connect to your API. 
-                    If you see CORS errors, enable mock mode or configure CORS headers.
-                `;
-                corsAlert.className = 'alert alert-success';
+                statusEl.className = 'connection-status status-connected';
+                statusEl.innerHTML = '<span class="status-indicator"></span><span>🧪 Mock Mode Active</span>';
+            } else if (!CONFIG.connectionTested) {
+                statusEl.className = 'connection-status status-disconnected';
+                statusEl.innerHTML = '<span class="status-indicator"></span><span>⚠️ Connection Not Tested</span>';
             }
         }
 
-        // Enhanced API call with better error handling
+        // Enhanced API calls
         async function makeApiCall(url, options = {}) {
-            const attempts = [
-                // Attempt 1: Direct call with proper headers
-                () => {
-                    log(`Direct API call to: ${url}`);
-                    return fetch(url, {
-                        ...options,
-                        mode: 'cors',
-                        credentials: 'omit',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'ngrok-skip-browser-warning': 'true',
-                            ...options.headers
-                        }
-                    });
-                },
-                
-                // Attempt 2: Simplified call
-                () => {
-                    log(`Simplified API call to: ${url}`);
-                    return fetch(url, {
-                        method: options.method || 'GET',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: options.body,
-                        mode: 'cors'
-                    });
-                },
-                
-                // Attempt 3: Using CORS proxy (if available)
-                () => {
-                    const proxyUrl = CONFIG.apiEndpoints.proxyPrefix + url;
-                    log(`CORS proxy call to: ${proxyUrl}`);
-                    return fetch(proxyUrl, {
-                        ...options,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    });
-                }
-            ];
-
-            for (let i = 0; i < attempts.length; i++) {
-                try {
-                    log(`API attempt ${i + 1} starting...`);
-                    const response = await attempts[i]();
-                    
-                    if (response.ok) {
-                        log(`API attempt ${i + 1} succeeded with status: ${response.status}`);
-                        return response;
-                    } else {
-                        log(`API attempt ${i + 1} failed with status: ${response.status}`, 'warn');
-                    }
-                } catch (error) {
-                    log(`API attempt ${i + 1} failed with error: ${error.message}`, 'error');
-                    
-                    if (i === attempts.length - 1) {
-                        throw new Error(`All API attempts failed. Last error: ${error.message}`);
-                    }
-                }
-            }
-        }
-
-        // Notification functions
-        function checkNotificationPermission() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                document.getElementById('notificationPermission').style.display = 'block';
-            }
-        }
-
-        function requestNotificationPermission() {
-            if ('Notification' in window) {
-                Notification.requestPermission().then(function(permission) {
-                    if (permission === 'granted') {
-                        document.getElementById('notificationPermission').style.display = 'none';
-                        showNotification('Notifications enabled!', 'You will now receive alerts about expiring certificates.');
-                    }
-                });
-            }
-        }
-
-        function showNotification(title, body) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(title, {
-                    body: body,
-                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%234CAF50"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="40">🥗</text></svg>',
-                    badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%234CAF50"/></svg>'
-                });
-            }
-        }
-
-        // Service Worker setup
-        function setupServiceWorker() {
-            if ('serviceWorker' in navigator) {
-                const swCode = `
-                    self.addEventListener('install', function(event) {
-                        console.log('Service Worker installing');
-                        self.skipWaiting();
-                    });
-                    
-                    self.addEventListener('activate', function(event) {
-                        console.log('Service Worker activated');
-                        event.waitUntil(clients.claim());
-                    });
-                    
-                    self.addEventListener('notificationclick', function(event) {
-                        event.notification.close();
-                        event.waitUntil(
-                            clients.openWindow('/')
-                        );
-                    });
-                `;
-                
-                const blob = new Blob([swCode], { type: 'application/javascript' });
-                const swUrl = URL.createObjectURL(blob);
-                
-                navigator.serviceWorker.register(swUrl)
-                    .then(registration => log('Service Worker registered successfully'))
-                    .catch(error => log('Service Worker registration failed: ' + error.message, 'error'));
-            }
-        }
-
-        // Auto-save input
-        function autoSaveInput() {
-            const input = document.getElementById('ingredientInput');
-            const savedInput = localStorage.getItem('halal_checker_input');
-            
-            if (savedInput) {
-                input.value = savedInput;
-            }
-            
-            input.addEventListener('input', function() {
-                localStorage.setItem('halal_checker_input', this.value);
-            });
-        }
-
-        // Main ingredient checking function
-        async function checkIngredients() {
-            const input = document.getElementById('ingredientInput');
-            const ingredients = input.value
-                .split('\n')
-                .map(item => item.trim().toLowerCase())
-                .filter(item => item.length > 0);
-
-            if (ingredients.length === 0) {
-                showAlert('Please enter at least one ingredient', 'error');
-                return;
-            }
-
-            log(`Checking ${ingredients.length} ingredients...`);
-            setLoadingState(true);
-
-            try {
-                let results;
-                
-                if (CONFIG.useMockData) {
-                    log('Using mock data for ingredient check');
-                    results = getMockResults(ingredients);
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-                } else {
-                    results = await checkIngredientsAPI(ingredients);
-                }
-
-                displayResults(results);
-                updateStats(results);
-                checkForExpiringCertificates(results);
-                
-                log(`Successfully checked ${ingredients.length} ingredients`);
-                
-            } catch (error) {
-                log(`Error checking ingredients: ${error.message}`, 'error');
-                showAlert('Failed to check ingredients. Please try again or enable mock data mode.', 'error');
-                
-                // Fallback to mock data if API fails
-                if (!CONFIG.useMockData) {
-                    log('Falling back to mock data due to API error');
-                    const mockResults = getMockResults(ingredients);
-                    displayResults(mockResults);
-                    updateStats(mockResults);
-                    showAlert('Using demo data due to connection issues', 'warning');
-                }
-            } finally {
-                setLoadingState(false);
-            }
-        }
-
-        // API ingredient checking
-        async function checkIngredientsAPI(ingredients) {
-            log('Starting API ingredient check...');
-            
-            const requestData = {
-                ingredients: ingredients,
-                chatId: CONFIG.chatId,
-                timestamp: Date.now()
-            };
-
-            log(`Sending request with ${ingredients.length} ingredients`);
+            log(`Making API call to: ${url}`);
             
             try {
-                const response = await makeApiCall(CONFIG.apiEndpoints.primary, {
-                    method: 'POST',
-                    body: JSON.stringify(requestData)
+                const response = await fetch(url, {
+                    mode: 'cors',
+                    credentials: 'omit',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'ngrok-skip-browser-warning': 'true',
+                        ...options.headers
+                    },
+                    ...options
                 });
 
+                log(`API response: ${response.status} ${response.statusText}`);
+                
                 if (!response.ok) {
-                    throw new Error(`API responded with status: ${response.status}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-
-                const responseData = await response.json();
-                log('Received API response, starting polling for results...');
                 
-                // Poll for results
-                return await pollForResults(responseData.id || CONFIG.chatId);
+                return response;
                 
             } catch (error) {
                 log(`API call failed: ${error.message}`, 'error');
@@ -1027,254 +918,248 @@
             }
         }
 
-        // Poll for results from the API
-        async function pollForResults(requestId) {
-            const { maxAttempts, initialDelay, backoffMultiplier, maxDelay } = CONFIG.polling;
-            let delay = initialDelay;
-            
-            log(`Starting to poll for results (ID: ${requestId})`);
-            
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                try {
-                    log(`Polling attempt ${attempt}/${maxAttempts} (delay: ${delay}ms)`);
-                    
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    
-                    const response = await makeApiCall(`${CONFIG.apiEndpoints.responseUrl}/${requestId}`);
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        
-                        if (data.results && data.results.length > 0) {
-                            log(`Results received after ${attempt} attempts`);
-                            return data.results;
-                        } else if (data.status === 'processing') {
-                            log(`Still processing... (attempt ${attempt})`);
-                        } else {
-                            log(`Unexpected response: ${JSON.stringify(data)}`);
-                        }
-                    } else {
-                        log(`Polling attempt ${attempt} failed with status: ${response.status}`);
-                    }
-                    
-                    // Increase delay for next attempt
-                    delay = Math.min(delay * backoffMultiplier, maxDelay);
-                    
-                } catch (error) {
-                    log(`Polling attempt ${attempt} error: ${error.message}`, 'error');
-                }
+        // Auto-save input
+        function autoSaveInput() {
+            const input = document.getElementById('ingredientInput');
+            const savedInput = localStorage.getItem('ingredientInput');
+            if (savedInput) {
+                input.value = savedInput;
             }
             
-            throw new Error(`Failed to get results after ${maxAttempts} attempts`);
-        }
-
-        // Generate mock results for testing
-        function getMockResults(ingredients) {
-            return ingredients.map(ingredient => {
-                const mockData = MOCK_INGREDIENT_DATA[ingredient.toLowerCase()];
-                
-                if (mockData) {
-                    return {
-                        ingredient: ingredient,
-                        status: mockData.status,
-                        expiryDate: mockData.expiryDate,
-                        supplier: mockData.supplier,
-                        certificateId: mockData.certificateId
-                    };
-                } else {
-                    return {
-                        ingredient: ingredient,
-                        status: 'Not Found',
-                        expiryDate: 'N/A',
-                        supplier: 'Unknown',
-                        certificateId: 'N/A'
-                    };
-                }
+            input.addEventListener('input', function() {
+                localStorage.setItem('ingredientInput', this.value);
             });
         }
 
-        // Display results in the table
+        // Enhanced ingredient checking
+        async function checkIngredients() {
+            updateConfigFromUI();
+            
+            const input = document.getElementById('ingredientInput');
+            const ingredients = input.value.trim().split('\n').filter(line => line.trim());
+            
+            if (ingredients.length === 0) {
+                showAlert('Please enter at least one ingredient.', 'warning');
+                return;
+            }
+
+            log(`Checking ${ingredients.length} ingredients...`);
+            setLoadingState(true);
+            
+            try {
+                if (CONFIG.useMockData) {
+                    await processMockData(ingredients);
+                } else {
+                    await processRealData(ingredients);
+                }
+            } catch (error) {
+                log(`Ingredient check failed: ${error.message}`, 'error');
+                showAlert(`Error checking ingredients: ${error.message}`, 'error');
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        async function processMockData(ingredients) {
+            log('Using mock data for ingredient checking');
+            
+            // Simulate API delay
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            const results = ingredients.map(ingredient => {
+                const cleanIngredient = ingredient.trim().toLowerCase();
+                const mockData = MOCK_INGREDIENT_DATA[cleanIngredient] || {
+                    status: 'Not Found',
+                    expiryDate: 'N/A',
+                    supplier: 'Unknown',
+                    certificateId: 'N/A'
+                };
+                
+                return {
+                    ingredient: ingredient.trim(),
+                    ...mockData
+                };
+            });
+            
+            displayResults(results);
+            log('Mock data processing completed');
+        }
+
+        async function processRealData(ingredients) {
+            log('Using real API for ingredient checking');
+            
+            const payload = {
+                ingredients: ingredients.map(i => i.trim()),
+                chatId: CONFIG.chatId,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Send request to n8n
+            await makeApiCall(CONFIG.apiEndpoints.primary, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            
+            log('Request sent to n8n, waiting for response...');
+            showAlert('Request sent! Waiting for results...', 'success');
+            
+            // Start polling for results
+            await pollForResults();
+        }
+
+        async function pollForResults() {
+            let attempt = 0;
+            let delay = CONFIG.polling.initialDelay;
+            
+            while (attempt < CONFIG.polling.maxAttempts) {
+                attempt++;
+                log(`Polling attempt ${attempt}/${CONFIG.polling.maxAttempts}`);
+                
+                try {
+                    const response = await makeApiCall(CONFIG.apiEndpoints.responseUrl);
+                    const data = await response.json();
+                    
+                    if (data && data.results) {
+                        log('Results received from API');
+                        displayResults(data.results);
+                        return;
+                    }
+                    
+                    log(`No results yet, waiting ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay = Math.min(delay * CONFIG.polling.backoffMultiplier, CONFIG.polling.maxDelay);
+                    
+                } catch (error) {
+                    log(`Polling error (attempt ${attempt}): ${error.message}`, 'warn');
+                    
+                    if (attempt === CONFIG.polling.maxAttempts) {
+                        throw new Error('Timeout waiting for results. Please try again.');
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay = Math.min(delay * CONFIG.polling.backoffMultiplier, CONFIG.polling.maxDelay);
+                }
+            }
+            
+            throw new Error('Maximum polling attempts reached');
+        }
+
         function displayResults(results) {
             const tbody = document.getElementById('resultsBody');
+            const statsSection = document.getElementById('statsSection');
+            
             tbody.innerHTML = '';
+            
+            if (!results || results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No results to display</td></tr>';
+                statsSection.style.display = 'none';
+                return;
+            }
 
+            let stats = { total: 0, certified: 0, expiring: 0, issues: 0 };
+            
             results.forEach(result => {
                 const row = document.createElement('tr');
-                const statusClass = getStatusClass(result.status, result.expiryDate);
+                const statusClass = getStatusClass(result.status);
                 
                 row.innerHTML = `
-                    <td style="font-weight: 600;">${capitalizeFirst(result.ingredient)}</td>
-                    <td><span class="status-cell ${statusClass}">${result.status}</span></td>
-                    <td>${formatDate(result.expiryDate)}</td>
-                    <td>${result.supplier}</td>
+                    <td>${escapeHtml(result.ingredient)}</td>
+                    <td><span class="status-cell ${statusClass}">${escapeHtml(result.status)}</span></td>
+                    <td>${escapeHtml(result.expiryDate || 'N/A')}</td>
+                    <td>${escapeHtml(result.supplier || 'Unknown')}</td>
+                    <td>${escapeHtml(result.certificateId || 'N/A')}</td>
                 `;
                 
                 tbody.appendChild(row);
-            });
-
-            document.getElementById('statsSection').style.display = 'block';
-        }
-
-        // Get status class for styling
-        function getStatusClass(status, expiryDate) {
-            if (status === 'Certified') {
-                if (isExpiringWithin30Days(expiryDate)) {
-                    return 'status-expiring';
-                }
-                return 'status-certified';
-            } else if (status === 'Expired' || status === 'Not Found') {
-                return 'status-expired';
-            }
-            return 'status-not-found';
-        }
-
-        // Check if certificate is expiring within 30 days
-        function isExpiringWithin30Days(expiryDate) {
-            if (!expiryDate || expiryDate === 'N/A') return false;
-            
-            const expiry = new Date(expiryDate);
-            const now = new Date();
-            const diffTime = expiry.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            return diffDays <= CONFIG.notificationThresholdDays && diffDays > 0;
-        }
-
-        // Update statistics display
-        function updateStats(results) {
-            const total = results.length;
-            const certified = results.filter(r => r.status === 'Certified' && !isExpiringWithin30Days(r.expiryDate)).length;
-            const expiring = results.filter(r => r.status === 'Certified' && isExpiringWithin30Days(r.expiryDate)).length;
-            const issues = results.filter(r => r.status !== 'Certified' || isExpiringWithin30Days(r.expiryDate)).length;
-
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('certifiedCount').textContent = certified;
-            document.getElementById('expiringCount').textContent = expiring;
-            document.getElementById('issuesCount').textContent = issues;
-        }
-
-        // Check for expiring certificates and show notifications
-        function checkForExpiringCertificates(results) {
-            const expiring = results.filter(r => isExpiringWithin30Days(r.expiryDate));
-            
-            if (expiring.length > 0) {
-                const ingredientNames = expiring.map(r => r.ingredient).join(', ');
-                showNotification(
-                    'Certificates Expiring Soon!',
-                    `${expiring.length} certificate(s) expiring within 30 days: ${ingredientNames}`
-                );
                 
-                showAlert(
-                    `Warning: ${expiring.length} certificate(s) expiring within 30 days`,
-                    'warning'
-                );
-            }
-        }
-
-        // Utility functions
-        function capitalizeFirst(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr || dateStr === 'N/A') return 'N/A';
+                // Update stats
+                stats.total++;
+                if (result.status === 'Certified') stats.certified++;
+                else if (result.status === 'Expiring') stats.expiring++;
+                else stats.issues++;
+            });
             
-            try {
-                return new Date(dateStr).toLocaleDateString('en-MY', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                });
-            } catch {
-                return dateStr;
-            }
+            updateStats(stats);
+            statsSection.style.display = 'grid';
+            
+            log(`Displayed ${results.length} ingredient results`);
+        }
+
+        function getStatusClass(status) {
+            const statusMap = {
+                'Certified': 'status-certified',
+                'Expiring': 'status-expiring',
+                'Expired': 'status-expired',
+                'Not Found': 'status-not-found'
+            };
+            return statusMap[status] || 'status-not-found';
+        }
+
+        function updateStats(stats) {
+            document.getElementById('totalCount').textContent = stats.total;
+            document.getElementById('certifiedCount').textContent = stats.certified;
+            document.getElementById('expiringCount').textContent = stats.expiring;
+            document.getElementById('issuesCount').textContent = stats.issues;
         }
 
         function setLoadingState(loading) {
-            const btn = document.querySelector('.check-btn');
-            const btnText = document.getElementById('checkBtnText');
+            const checkBtn = document.querySelector('.check-btn');
+            const checkBtnText = document.getElementById('checkBtnText');
             
             if (loading) {
-                btn.disabled = true;
-                btn.classList.add('loading');
-                btnText.textContent = 'Checking...';
+                checkBtn.disabled = true;
+                checkBtn.classList.add('loading');
+                checkBtnText.textContent = 'Checking...';
             } else {
-                btn.disabled = false;
-                btn.classList.remove('loading');
-                btnText.textContent = 'Check Ingredients';
+                checkBtn.disabled = false;
+                checkBtn.classList.remove('loading');
+                checkBtnText.textContent = '✅ Check Ingredients';
             }
-        }
-
-        function showAlert(message, type) {
-            // Remove existing alerts
-            const existingAlerts = document.querySelectorAll('.alert:not(.alert-warning):not(#corsAlert)');
-            existingAlerts.forEach(alert => alert.remove());
-            
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.innerHTML = `<strong>${type === 'error' ? 'Error' : type === 'warning' ? 'Warning' : 'Success'}:</strong> ${message}`;
-            
-            const container = document.querySelector('.panel');
-            const statsSection = document.getElementById('statsSection');
-            container.insertBefore(alert, statsSection);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.remove();
-                }
-            }, 5000);
         }
 
         function clearResults() {
             document.getElementById('ingredientInput').value = '';
-            document.getElementById('resultsBody').innerHTML = `
-                <tr>
-                    <td colspan="4" class="empty-state">
-                        Enter ingredients above and click "Check Ingredients" to see results
-                    </td>
-                </tr>
-            `;
+            document.getElementById('resultsBody').innerHTML = 
+                '<tr><td colspan="5" class="empty-state">Enter ingredients above and click "Check Ingredients" to see results</td></tr>';
             document.getElementById('statsSection').style.display = 'none';
-            localStorage.removeItem('halal_checker_input');
-            
-            // Clear any alerts
-            const alerts = document.querySelectorAll('.alert:not(.alert-warning):not(#corsAlert)');
-            alerts.forEach(alert => alert.remove());
-            
+            localStorage.removeItem('ingredientInput');
             log('Results cleared');
         }
 
-        // Chat functionality
-        let chatHistory = [];
-
-        function initializeChat() {
-            log('Initializing chat...');
-            
-            // Load chat history from localStorage
-            const savedHistory = localStorage.getItem('halal_chat_history');
-            if (savedHistory) {
-                try {
-                    chatHistory = JSON.parse(savedHistory);
-                    displayChatHistory();
-                } catch (error) {
-                    log('Failed to load chat history: ' + error.message, 'error');
-                }
+        function exportResults() {
+            const rows = document.querySelectorAll('#resultsTable tbody tr');
+            if (rows.length === 1 && rows[0].querySelector('.empty-state')) {
+                showAlert('No results to export.', 'warning');
+                return;
             }
+            
+            let csv = 'Ingredient,Status,Expiry Date,Supplier,Certificate ID\n';
+            
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length === 5) {
+                    const values = Array.from(cells).map(cell => {
+                        const statusSpan = cell.querySelector('.status-cell');
+                        return statusSpan ? statusSpan.textContent : cell.textContent;
+                    });
+                    csv += values.map(v => `"${v.replace(/"/g, '""')}"`).join(',') + '\n';
+                }
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `halal_ingredients_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            log('Results exported to CSV');
         }
 
-        function displayChatHistory() {
-            const messagesContainer = document.getElementById('chatMessages');
-            
-            // Clear existing messages except the initial welcome message
-            const welcomeMessage = messagesContainer.querySelector('.message-ai');
-            messagesContainer.innerHTML = '';
-            messagesContainer.appendChild(welcomeMessage);
-            
-            // Display chat history
-            chatHistory.forEach(message => {
-                displayMessage(message.content, message.isUser, false);
-            });
+        // Chat functionality
+        function initializeChat() {
+            log('Initializing chat functionality');
         }
 
         function handleChatKeyPress(event) {
@@ -1290,95 +1175,136 @@
             
             if (!message) return;
             
-            log(`Sending chat message: ${message}`);
+            updateConfigFromUI();
             
-            // Display user message
-            displayMessage(message, true);
+            // Add user message to chat
+            addMessageToChat(message, 'user');
             input.value = '';
             
-            // Add to history and save
-            chatHistory.push({ content: message, isUser: true, timestamp: Date.now() });
-            saveChatHistory();
-            
-            // Set loading state
+            // Show typing indicator
+            addTypingIndicator();
             setChatLoadingState(true);
             
+            log(`Sending chat message: ${message}`);
+            
             try {
-                let response;
-                
                 if (CONFIG.useMockData) {
-                    response = await getMockChatResponse(message);
+                    await processMockChatResponse(message);
                 } else {
-                    response = await getChatResponseAPI(message);
+                    await processRealChatResponse(message);
                 }
-                
-                // Display AI response
-                displayMessage(response, false);
-                
-                // Add to history and save
-                chatHistory.push({ content: response, isUser: false, timestamp: Date.now() });
-                saveChatHistory();
-                
             } catch (error) {
                 log(`Chat error: ${error.message}`, 'error');
-                displayMessage('I apologize, but I\'m having trouble responding right now. Please try again later.', false);
+                removeTypingIndicator();
+                addMessageToChat('Sorry, I encountered an error. Please try again.', 'ai');
             } finally {
                 setChatLoadingState(false);
             }
         }
 
-        function displayMessage(content, isUser, scrollToBottom = true) {
-            const messagesContainer = document.getElementById('chatMessages');
+        async function processMockChatResponse(message) {
+            // Simulate processing delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const responses = [
+                "That's a great question about halal ingredients! Based on Islamic dietary laws, ingredients must be free from pork, alcohol, and other prohibited substances.",
+                "For halal certification, it's important to verify the source and processing methods of ingredients. Would you like me to check specific ingredients?",
+                "Gelatin is often a concern in halal food - it can be derived from pork or beef. Beef gelatin from halal-slaughtered animals is permissible.",
+                "Emulsifiers like mono- and diglycerides can be plant or animal-derived. The halal status depends on the source.",
+                "I can help you understand halal ingredient requirements. What specific ingredients are you concerned about?"
+            ];
+            
+            const response = responses[Math.floor(Math.random() * responses.length)];
+            
+            removeTypingIndicator();
+            addMessageToChat(response, 'ai');
+            log('Mock chat response sent');
+        }
+
+        async function processRealChatResponse(message) {
+            const payload = {
+                message: message,
+                chatId: CONFIG.chatId,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Send to n8n chat endpoint
+            await makeApiCall(CONFIG.apiEndpoints.primary.replace('/ingredient-check', '/chat'), {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            
+            log('Chat message sent to n8n, waiting for response...');
+            
+            // Poll for chat response
+            await pollForChatResponse();
+        }
+
+        async function pollForChatResponse() {
+            let attempt = 0;
+            let delay = CONFIG.polling.initialDelay;
+            
+            while (attempt < CONFIG.polling.maxAttempts) {
+                attempt++;
+                log(`Chat polling attempt ${attempt}/${CONFIG.polling.maxAttempts}`);
+                
+                try {
+                    const response = await makeApiCall(CONFIG.apiEndpoints.chatResponseUrl);
+                    const data = await response.json();
+                    
+                    if (data && data.response) {
+                        log('Chat response received from API');
+                        removeTypingIndicator();
+                        addMessageToChat(data.response, 'ai');
+                        return;
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay = Math.min(delay * CONFIG.polling.backoffMultiplier, CONFIG.polling.maxDelay);
+                    
+                } catch (error) {
+                    log(`Chat polling error (attempt ${attempt}): ${error.message}`, 'warn');
+                    
+                    if (attempt === CONFIG.polling.maxAttempts) {
+                        throw new Error('Timeout waiting for chat response');
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+            
+            throw new Error('Maximum chat polling attempts reached');
+        }
+
+        function addMessageToChat(message, sender) {
+            const chatMessages = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'message-user' : 'message-ai'}`;
+            messageDiv.className = `message message-${sender}`;
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
+            contentDiv.textContent = message;
             
             messageDiv.appendChild(contentDiv);
-            messagesContainer.appendChild(messageDiv);
+            chatMessages.appendChild(messageDiv);
             
-            if (scrollToBottom) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        function setChatLoadingState(loading) {
-            const btn = document.querySelector('.send-btn');
-            const btnText = document.getElementById('sendBtnText');
-            const input = document.getElementById('chatInput');
-            
-            if (loading) {
-                btn.disabled = true;
-                input.disabled = true;
-                btnText.textContent = 'Sending...';
-                
-                // Show typing indicator
-                displayTypingIndicator();
-            } else {
-                btn.disabled = false;
-                input.disabled = false;
-                btnText.textContent = 'Send';
-                
-                // Remove typing indicator
-                removeTypingIndicator();
-            }
-        }
-
-        function displayTypingIndicator() {
-            const messagesContainer = document.getElementById('chatMessages');
+        function addTypingIndicator() {
+            const chatMessages = document.getElementById('chatMessages');
             const typingDiv = document.createElement('div');
             typingDiv.className = 'message message-ai typing-indicator';
             typingDiv.id = 'typingIndicator';
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.innerHTML = 'AI is typing<span class="dots">...</span>';
+            contentDiv.innerHTML = '<span class="dots">●●●</span> Thinking...';
             
             typingDiv.appendChild(contentDiv);
-            messagesContainer.appendChild(typingDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            chatMessages.appendChild(typingDiv);
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         function removeTypingIndicator() {
@@ -1388,171 +1314,57 @@
             }
         }
 
-        function saveChatHistory() {
-            try {
-                // Keep only last 50 messages to prevent localStorage bloat
-                const recentHistory = chatHistory.slice(-50);
-                localStorage.setItem('halal_chat_history', JSON.stringify(recentHistory));
-                chatHistory = recentHistory;
-            } catch (error) {
-                log('Failed to save chat history: ' + error.message, 'error');
+        function setChatLoadingState(loading) {
+            const sendBtn = document.querySelector('.send-btn');
+            const sendBtnText = document.getElementById('sendBtnText');
+            const chatInput = document.getElementById('chatInput');
+            
+            if (loading) {
+                sendBtn.disabled = true;
+                chatInput.disabled = true;
+                sendBtnText.textContent = '...';
+            } else {
+                sendBtn.disabled = false;
+                chatInput.disabled = false;
+                sendBtnText.textContent = 'Send';
             }
         }
 
-        // Mock chat responses
-        async function getMockChatResponse(message) {
-            const responses = {
-                'halal': 'Halal refers to what is permissible according to Islamic law. In food, it means the food is prepared according to Islamic dietary guidelines.',
-                'haram': 'Haram refers to anything forbidden by Islamic law. Common haram ingredients include pork, alcohol, and certain food additives.',
-                'certificate': 'Halal certificates are issued by recognized Islamic organizations to verify that products comply with Islamic dietary laws.',
-                'gelatin': 'Gelatin can be halal or haram depending on its source. Gelatin from halal-slaughtered animals or fish is halal, while gelatin from pork is haram.',
-                'alcohol': 'Alcohol is generally considered haram in Islam. However, some scholars allow trace amounts that occur naturally in food processing.',
-                'chicken': 'Chicken is halal if it\'s slaughtered according to Islamic guidelines by a Muslim who says "Bismillah" (In the name of Allah).',
-                'beef': 'Beef is halal when the cattle is slaughtered according to Islamic law, ensuring the animal is healthy and the slaughter is performed correctly.'
-            };
+        // Utility functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showAlert(message, type) {
+            // Remove existing alerts
+            const existingAlerts = document.querySelectorAll('.alert');
+            existingAlerts.forEach(alert => alert.remove());
             
-            const lowerMessage = message.toLowerCase();
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
             
-            // Find matching keywords
-            for (const [keyword, response] of Object.entries(responses)) {
-                if (lowerMessage.includes(keyword)) {
-                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-                    return response;
+            const container = document.querySelector('.panel');
+            container.insertBefore(alert, container.firstChild.nextSibling);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
                 }
-            }
-            
-            // Default response
-            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-            return 'I\'m here to help with halal ingredient questions. You can ask me about specific ingredients, certification processes, or Islamic dietary guidelines. What would you like to know?';
+            }, 5000);
         }
 
-        // API chat response
-        async function getChatResponseAPI(message) {
-            log('Sending chat message to API...');
-            
-            const requestData = {
-                message: message,
-                chatId: CONFIG.chatId,
-                context: 'halal_ingredients',
-                timestamp: Date.now()
-            };
-            
-            try {
-                const response = await makeApiCall(CONFIG.apiEndpoints.primary + '/chat', {
-                    method: 'POST',
-                    body: JSON.stringify(requestData)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Chat API responded with status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (data.response) {
-                    return data.response;
-                } else {
-                    throw new Error('No response received from chat API');
-                }
-                
-            } catch (error) {
-                log(`Chat API error: ${error.message}`, 'error');
-                throw error;
-            }
-        }
-
-        // Export functionality (bonus feature)
-        function exportResults() {
-            const results = Array.from(document.querySelectorAll('#resultsBody tr')).map(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length === 1) return null; // Skip empty state row
-                
-                return {
-                    Ingredient: cells[0].textContent,
-                    Status: cells[1].textContent,
-                    ExpiryDate: cells[2].textContent,
-                    Supplier: cells[3].textContent
-                };
-            }).filter(Boolean);
-            
-            if (results.length === 0) {
-                showAlert('No results to export', 'warning');
-                return;
-            }
-            
-            const csv = convertToCSV(results);
-            downloadFile(csv, 'halal-ingredient-check-results.csv', 'text/csv');
-            
-            log(`Exported ${results.length} results to CSV`);
-        }
-
-        function convertToCSV(data) {
-            if (data.length === 0) return '';
-            
-            const headers = Object.keys(data[0]);
-            const csvHeaders = headers.join(',');
-            
-            const csvRows = data.map(row => 
-                headers.map(header => {
-                    const value = row[header];
-                    // Escape quotes and wrap in quotes if contains comma
-                    return value.includes(',') ? `"${value.replace(/"/g, '""')}"` : value;
-                }).join(',')
-            );
-            
-            return [csvHeaders, ...csvRows].join('\n');
-        }
-
-        function downloadFile(content, filename, contentType) {
-            const blob = new Blob([content], { type: contentType });
-            const url = URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            link.style.display = 'none';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            URL.revokeObjectURL(url);
-        }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(event) {
-            // Ctrl+Enter to check ingredients
-            if (event.ctrlKey && event.key === 'Enter') {
-                event.preventDefault();
-                checkIngredients();
-            }
-            
-            // Ctrl+Shift+C to clear results
-            if (event.ctrlKey && event.shiftKey && event.key === 'C') {
-                event.preventDefault();
-                clearResults();
-            }
-            
-            // Ctrl+E to export results
-            if (event.ctrlKey && event.key === 'e') {
-                event.preventDefault();
-                exportResults();
-            }
+        // Error handling
+        window.addEventListener('error', function(event) {
+            log(`JavaScript error: ${event.error.message}`, 'error');
         });
 
-        // Add export button to the UI
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttonGroup = document.querySelector('.button-group');
-            const exportBtn = document.createElement('button');
-            exportBtn.innerHTML = '📥 Export';
-            exportBtn.onclick = exportResults;
-            exportBtn.style.background = '#17a2b8';
-            exportBtn.style.color = 'white';
-            buttonGroup.appendChild(exportBtn);
+        window.addEventListener('unhandledrejection', function(event) {
+            log(`Unhandled promise rejection: ${event.reason}`, 'error');
         });
-
-        log('Halal Ingredient Checker fully loaded and ready!');
     </script>
-    <script src="main.js"></script>
 </body>
 </html>
