@@ -318,6 +318,26 @@
             transition: all 0.3s ease;
         }
 
+        .notification-permission {
+            background: linear-gradient(45deg, #ffd700, #ffed4a);
+            color: #333;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .notification-permission button {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
         .config-section {
             background: #e3f2fd;
             padding: 15px;
@@ -438,6 +458,31 @@
             border: 1px solid #c3e6cb;
         }
 
+        .debug-panel {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .debug-panel h4 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        .debug-log {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
         .typing-indicator .dots {
             animation: typing 1.5s infinite;
         }
@@ -469,20 +514,34 @@
                     <label for="useMockData">Use Mock Data (disable for real API)</label>
                 </div>
                 <div style="margin-bottom: 10px;">
-                    <label for="apiUrl" style="font-size: 12px;">Webhook URL:</label>
+                    <label for="apiUrl" style="font-size: 12px;">API URL:</label>
                     <input type="text" id="apiUrl" class="config-input" 
-                           placeholder="https://your-ngrok-url.ngrok-free.app/webhook/ingredient-check" 
-                           value="">
+                           placeholder="https://your-backend-url.com/api" 
+                           value="https://c14a-27-125-240-61.ngrok-free.app/webhook/ingredient-check">
                 </div>
                 <div style="margin-bottom: 10px;">
                     <label for="responseUrl" style="font-size: 12px;">Response URL:</label>
                     <input type="text" id="responseUrl" class="config-input" 
-                           placeholder="https://your-ngrok-url.ngrok-free.app/webhook/response/" 
-                           value="">
+                           placeholder="https://your-backend-url.com/api/response" 
+                           value="https://c14a-27-125-240-61.ngrok-free.app/webhook/response-webhook/response">
                 </div>
-                <div class="alert alert-warning" id="configAlert">
-                    <strong>Setup Required:</strong> Configure your webhook URLs above, then uncheck "Use Mock Data" to connect to your API.
+                <div class="alert alert-warning" id="corsAlert">
+                    <strong>CORS Issue Detected:</strong> Currently using mock data due to CORS restrictions. 
+                    To fix: Configure CORS headers on your backend or use a proxy.
                 </div>
+            </div>
+
+            <!-- Debug Panel -->
+            <div class="debug-panel" id="debugPanel" style="display: none;">
+                <h4>Debug Information</h4>
+                <div class="debug-log" id="debugLog"></div>
+                <button onclick="clearDebugLog()" style="margin-top: 10px; padding: 5px 10px; font-size: 11px;">Clear Log</button>
+            </div>
+
+            <div id="notificationPermission" class="notification-permission" style="display: none;">
+                Enable notifications to get alerts about expiring certificates!
+                <br>
+                <button onclick="requestNotificationPermission()">Enable Notifications</button>
             </div>
 
             <div class="input-section">
@@ -498,6 +557,7 @@
                     <span id="checkBtnText">Check Ingredients</span>
                 </button>
                 <button class="clear-btn" onclick="clearResults()">Clear All</button>
+                <button onclick="toggleDebugPanel()" style="background: #6c757d; color: white;">Debug</button>
             </div>
 
             <div class="stats-section" id="statsSection" style="display: none;">
@@ -521,23 +581,24 @@
 
             <div class="results-section">
                 <div class="results-table">
-                    <table id="resultsTable">
-                        <thead>
-                            <tr>
-                                <th>Ingredient</th>
-                                <th>Status</th>
-                                <th>Expiry Date</th>
-                                <th>Supplier</th>
-                            </tr>
-                        </thead>
-                        <tbody id="resultsBody">
-                            <tr>
-                                <td colspan="4" class="empty-state">
-                                    Enter ingredients above and click "Check Ingredients" to see results
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <table id="resultsTable" class="table">
+               <thead>
+              <tr>
+                  <th>Ingredient</th>
+                  <th>Status</th>
+                  <th>Expiry Date</th>
+                  <th>Supplier</th>
+                  <th>Certificate ID</th>
+             </tr>
+             </thead>
+            <tbody id="resultsBody">
+         <tr>
+            <td colspan="5" class="empty-state">
+                Enter ingredients above and click "Check Ingredients" to see results
+            </td>
+        </tr>
+    </tbody>
+</table>
                 </div>
             </div>
         </div>
@@ -573,18 +634,59 @@
     </div>
 
     <script>
-        // In-memory storage instead of localStorage
-        let appState = {
-            chatHistory: [],
-            savedInput: '',
-            config: {
-                useMockData: true,
-                webhookUrl: '',
-                responseUrl: '',
-                chatId: 'session_' + Date.now(),
-                notificationThresholdDays: 30
+        // Configuration with multiple fallback options
+        const CONFIG = {
+            apiEndpoints: {
+                primary: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/ingredient-check',
+                fallback: 'https://your-cors-proxy.com/api',
+                proxyPrefix: 'https://cors-anywhere.herokuapp.com/',
+                responseUrl: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/response-webhook/response'
+            },
+            useMockData: true, // Default to mock data to avoid CORS issues
+            notificationThresholdDays: 30,
+            chatId: 'session_' + Date.now(),
+            polling: {
+                maxAttempts: 15,
+                initialDelay: 1000,
+                backoffMultiplier: 1.2,
+                maxDelay: 5000
             }
         };
+
+        // Debug logging
+        let debugLog = [];
+        
+        function log(message, level = 'info') {
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+            debugLog.push(logEntry);
+            console.log(logEntry);
+            
+            // Keep only last 100 entries
+            if (debugLog.length > 100) {
+                debugLog = debugLog.slice(-100);
+            }
+            
+            updateDebugPanel();
+        }
+
+        function updateDebugPanel() {
+            const debugLogElement = document.getElementById('debugLog');
+            if (debugLogElement) {
+                debugLogElement.textContent = debugLog.join('\n');
+                debugLogElement.scrollTop = debugLogElement.scrollHeight;
+            }
+        }
+
+        function toggleDebugPanel() {
+            const panel = document.getElementById('debugPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function clearDebugLog() {
+            debugLog = [];
+            updateDebugPanel();
+        }
 
         // Mock data for testing
         const MOCK_INGREDIENT_DATA = {
@@ -601,16 +703,16 @@
                 certificateId: 'JAKIM-2024-002'
             },
             'vanilla extract': {
-                status: 'Expired',
-                expiryDate: '2025-05-01',
+                status: 'Certified',
+                expiryDate: '2025-08-15',
                 supplier: 'Flavor Masters Sdn Bhd',
-                certificateId: 'JAKIM-2023-015'
+                certificateId: 'JAKIM-2024-015'
             },
             'citric acid': {
-                status: 'Not Found',
-                expiryDate: null,
-                supplier: null,
-                certificateId: null
+                status: 'Certified',
+                expiryDate: '2025-11-30',
+                supplier: 'Chemical Solutions Malaysia',
+                certificateId: 'JAKIM-2024-020'
             },
             'xanthan gum': {
                 status: 'Certified',
@@ -638,10 +740,16 @@
         });
 
         function initializeApp() {
+            log('Initializing Halal Ingredient Checker...');
+            checkNotificationPermission();
             setupConfigurationHandlers();
             initializeChat();
             autoSaveInput();
-            updateConfigAlert();
+            setupServiceWorker();
+            
+            // Set initial configuration
+            updateConfigFromUI();
+            log('App initialized successfully');
         }
 
         function setupConfigurationHandlers() {
@@ -650,344 +758,472 @@
             const responseUrlInput = document.getElementById('responseUrl');
             
             mockDataCheckbox.addEventListener('change', function() {
-                appState.config.useMockData = this.checked;
-                updateConfigAlert();
+                CONFIG.useMockData = this.checked;
+                log(`Mock data mode: ${this.checked ? 'enabled' : 'disabled'}`);
+                updateCorsAlert();
             });
             
             apiUrlInput.addEventListener('input', function() {
-                appState.config.webhookUrl = this.value;
-                updateConfigAlert();
+                CONFIG.apiEndpoints.primary = this.value;
+                log(`API URL updated: ${this.value}`);
             });
 
             responseUrlInput.addEventListener('input', function() {
-                appState.config.responseUrl = this.value;
-                updateConfigAlert();
+                CONFIG.apiEndpoints.responseUrl = this.value;
+                log(`Response URL updated: ${this.value}`);
             });
+            
+            updateCorsAlert();
         }
 
-        function updateConfigAlert() {
-            const alert = document.getElementById('configAlert');
-            const webhookUrl = document.getElementById('apiUrl').value;
-            const responseUrl = document.getElementById('responseUrl').value;
+        function updateConfigFromUI() {
+            const mockDataCheckbox = document.getElementById('useMockData');
+            const apiUrlInput = document.getElementById('apiUrl');
+            const responseUrlInput = document.getElementById('responseUrl');
             
-            if (appState.config.useMockData) {
-                alert.innerHTML = `
-                    <strong>Mock Mode:</strong> Using sample data for demonstration.
-                    <br><small>Configure webhook URLs and uncheck "Use Mock Data" to connect to your API.</small>
+            CONFIG.useMockData = mockDataCheckbox.checked;
+            CONFIG.apiEndpoints.primary = apiUrlInput.value;
+            CONFIG.apiEndpoints.responseUrl = responseUrlInput.value;
+        }
+
+        function updateCorsAlert() {
+            const corsAlert = document.getElementById('corsAlert');
+            if (CONFIG.useMockData) {
+                corsAlert.innerHTML = `
+                    <strong>Mock Mode:</strong> Using sample data. Uncheck "Use Mock Data" to connect to your API.
+                    <br><small>Make sure your backend has CORS headers configured properly.</small>
                 `;
-                alert.className = 'alert alert-warning';
-            } else if (!webhookUrl || !responseUrl) {
-                alert.innerHTML = `
-                    <strong>Configuration Required:</strong> Please set both webhook and response URLs to use live API.
-                `;
-                alert.className = 'alert alert-error';
+                corsAlert.className = 'alert alert-warning';
             } else {
-                alert.innerHTML = `
-                    <strong>Live Mode:</strong> Connected to your API endpoints.
-                    <br><small>Make sure your webhook server includes proper CORS headers.</small>
+                corsAlert.innerHTML = `
+                    <strong>Live Mode:</strong> Attempting to connect to your API. 
+                    If you see CORS errors, enable mock mode or configure CORS headers.
                 `;
-                alert.className = 'alert alert-success';
+                corsAlert.className = 'alert alert-success';
             }
         }
 
         // Enhanced API call with better error handling
         async function makeApiCall(url, options = {}) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-            try {
-                const response = await fetch(url, {
-                    ...options,
-                    signal: controller.signal,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        // Add headers that might help with CORS
-                        'Access-Control-Request-Method': 'POST',
-                        'Access-Control-Request-Headers': 'Content-Type',
-                        ...options.headers
-                    },
-                    mode: 'cors',
-                    credentials: 'omit'
-                });
+            const attempts = [
+                // Attempt 1: Direct call with proper headers
+                () => {
+                    log(`Direct API call to: ${url}`);
+                    return fetch(url, {
+                        ...options,
+                        mode: 'cors',
+                        credentials: 'omit',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'ngrok-skip-browser-warning': 'true',
+                            ...options.headers
+                        }
+                    });
+                },
                 
-                clearTimeout(timeoutId);
-                return response;
+                // Attempt 2: Simplified call
+                () => {
+                    log(`Simplified API call to: ${url}`);
+                    return fetch(url, {
+                        method: options.method || 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: options.body,
+                        mode: 'cors'
+                    });
+                },
                 
-            } catch (error) {
-                clearTimeout(timeoutId);
-                
-                if (error.name === 'AbortError') {
-                    throw new Error('Request timeout - check your webhook URL');
-                } else if (error.message.includes('CORS')) {
-                    throw new Error('CORS error - configure Access-Control-Allow-Origin header on your webhook server');
-                } else if (error.message.includes('fetch')) {
-                    throw new Error('Network error - check if webhook URL is accessible');
+                // Attempt 3: Using CORS proxy (if available)
+                () => {
+                    const proxyUrl = CONFIG.apiEndpoints.proxyPrefix + url;
+                    log(`CORS proxy call to: ${proxyUrl}`);
+                    return fetch(proxyUrl, {
+                        ...options,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
                 }
-                
-                throw error;
+            ];
+
+            for (let i = 0; i < attempts.length; i++) {
+                try {
+                    log(`API attempt ${i + 1} starting...`);
+                    const response = await attempts[i]();
+                    
+                    if (response.ok) {
+                        log(`API attempt ${i + 1} succeeded with status: ${response.status}`);
+                        return response;
+                    } else {
+                        log(`API attempt ${i + 1} failed with status: ${response.status}`, 'warn');
+                    }
+                } catch (error) {
+                    log(`API attempt ${i + 1} failed with error: ${error.message}`, 'error');
+                    
+                    if (i === attempts.length - 1) {
+                        throw new Error(`All API attempts failed. Last error: ${error.message}`);
+                    }
+                }
             }
         }
 
-        // Ingredient checking functions
+        // Notification functions
+        function checkNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                document.getElementById('notificationPermission').style.display = 'block';
+            }
+        }
+
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(function(permission) {
+                    if (permission === 'granted') {
+                        document.getElementById('notificationPermission').style.display = 'none';
+                        showNotification('Notifications enabled!', 'You will now receive alerts about expiring certificates.');
+                    }
+                });
+            }
+        }
+
+        function showNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%234CAF50"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="40">🥗</text></svg>',
+                    badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%234CAF50"/></svg>'
+                });
+            }
+        }
+
+        // Service Worker setup
+        function setupServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    self.addEventListener('install', function(event) {
+                        console.log('Service Worker installing');
+                        self.skipWaiting();
+                    });
+                    
+                    self.addEventListener('activate', function(event) {
+                        console.log('Service Worker activated');
+                        event.waitUntil(clients.claim());
+                    });
+                    
+                    self.addEventListener('notificationclick', function(event) {
+                        event.notification.close();
+                        event.waitUntil(
+                            clients.openWindow('/')
+                        );
+                    });
+                `;
+                
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                
+                navigator.serviceWorker.register(swUrl)
+                    .then(registration => log('Service Worker registered successfully'))
+                    .catch(error => log('Service Worker registration failed: ' + error.message, 'error'));
+            }
+        }
+
+        // Auto-save input
+        function autoSaveInput() {
+            const input = document.getElementById('ingredientInput');
+            const savedInput = localStorage.getItem('halal_checker_input');
+            
+            if (savedInput) {
+                input.value = savedInput;
+            }
+            
+            input.addEventListener('input', function() {
+                localStorage.setItem('halal_checker_input', this.value);
+            });
+        }
+
+        // Main ingredient checking function
         async function checkIngredients() {
-            const input = document.getElementById('ingredientInput').value.trim();
-            if (!input) {
-                showAlert('Please enter some ingredients to check.', 'warning');
+            const input = document.getElementById('ingredientInput');
+            const ingredients = input.value
+                .split('\n')
+                .map(item => item.trim().toLowerCase())
+                .filter(item => item.length > 0);
+
+            if (ingredients.length === 0) {
+                showAlert('Please enter at least one ingredient', 'error');
                 return;
             }
 
-            const ingredients = input.split('\n').filter(line => line.trim());
-            const button = document.querySelector('.check-btn');
-            const buttonText = document.getElementById('checkBtnText');
-            
-            // Show loading state
-            button.disabled = true;
-            button.classList.add('loading');
-            buttonText.textContent = '';
+            log(`Checking ${ingredients.length} ingredients...`);
+            setLoadingState(true);
 
-            const results = [];
-            
             try {
-                if (appState.config.useMockData) {
-                    // Process mock data
-                    for (const ingredient of ingredients) {
-                        const result = await checkSingleIngredientMock(ingredient.trim());
-                        results.push(result);
-                    }
+                let results;
+                
+                if (CONFIG.useMockData) {
+                    log('Using mock data for ingredient check');
+                    results = getMockResults(ingredients);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
                 } else {
-                    // Validate configuration
-                    if (!appState.config.webhookUrl || !appState.config.responseUrl) {
-                        throw new Error('Please configure webhook and response URLs first');
-                    }
-
-                    // Process with real API
-                    for (const ingredient of ingredients) {
-                        try {
-                            const result = await checkSingleIngredient(ingredient.trim());
-                            results.push(result);
-                        } catch (error) {
-                            results.push({
-                                ingredient: ingredient.trim(),
-                                status: 'API Error',
-                                expiryDate: null,
-                                supplier: null,
-                                error: error.message
-                            });
-                        }
-                        
-                        // Add delay between requests to avoid overwhelming the server
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
+                    results = await checkIngredientsAPI(ingredients);
                 }
 
                 displayResults(results);
                 updateStats(results);
                 checkForExpiringCertificates(results);
                 
+                log(`Successfully checked ${ingredients.length} ingredients`);
+                
             } catch (error) {
-                console.error('Error checking ingredients:', error);
-                showAlert(`Error: ${error.message}`, 'error');
+                log(`Error checking ingredients: ${error.message}`, 'error');
+                showAlert('Failed to check ingredients. Please try again or enable mock data mode.', 'error');
+                
+                // Fallback to mock data if API fails
+                if (!CONFIG.useMockData) {
+                    log('Falling back to mock data due to API error');
+                    const mockResults = getMockResults(ingredients);
+                    displayResults(mockResults);
+                    updateStats(mockResults);
+                    showAlert('Using demo data due to connection issues', 'warning');
+                }
             } finally {
-                // Reset button state
-                button.disabled = false;
-                button.classList.remove('loading');
-                buttonText.textContent = 'Check Ingredients';
+                setLoadingState(false);
             }
         }
 
-        async function checkSingleIngredientMock(ingredient) {
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, Math.random() * 1000 + 300));
+        // API ingredient checking
+        async function checkIngredientsAPI(ingredients) {
+            log('Starting API ingredient check...');
             
-            const mockData = MOCK_INGREDIENT_DATA[ingredient.toLowerCase()];
-            if (mockData) {
-                return {
-                    ingredient: ingredient,
-                    ...mockData
-                };
-            } else {
-                return {
-                    ingredient: ingredient,
-                    status: 'Not Found',
-                    expiryDate: null,
-                    supplier: null,
-                    certificateId: null
-                };
-            }
-        }
+            const requestData = {
+                ingredients: ingredients,
+                chatId: CONFIG.chatId,
+                timestamp: Date.now()
+            };
 
-        async function checkSingleIngredient(ingredient) {
-            const chatId = appState.config.chatId + '_' + ingredient.replace(/\s+/g, '_');
+            log(`Sending request with ${ingredients.length} ingredients`);
             
             try {
-                // Send webhook request
-                const response = await makeApiCall(appState.config.webhookUrl, {
+                const response = await makeApiCall(CONFIG.apiEndpoints.primary, {
                     method: 'POST',
-                    body: JSON.stringify({ 
-                        ingredient: ingredient,
-                        chatId: chatId
-                    })
+                    body: JSON.stringify(requestData)
                 });
-                
+
                 if (!response.ok) {
-                    throw new Error(`Webhook failed with status: ${response.status}`);
+                    throw new Error(`API responded with status: ${response.status}`);
                 }
+
+                const responseData = await response.json();
+                log('Received API response, starting polling for results...');
                 
-                // Poll for response
-                const result = await pollForResponse(chatId, ingredient);
-                return result;
+                // Poll for results
+                return await pollForResults(responseData.id || CONFIG.chatId);
                 
             } catch (error) {
-                console.error(`Error checking ingredient ${ingredient}:`, error);
+                log(`API call failed: ${error.message}`, 'error');
                 throw error;
             }
         }
 
-        async function pollForResponse(chatId, ingredient, maxAttempts = 6) {
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        // Poll for results from the API
+        async function pollForResults(requestId) {
+            const { maxAttempts, initialDelay, backoffMultiplier, maxDelay } = CONFIG.polling;
+            let delay = initialDelay;
+            
+            log(`Starting to poll for results (ID: ${requestId})`);
+            
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    log(`Polling attempt ${attempt}/${maxAttempts} (delay: ${delay}ms)`);
                     
-                    const responseUrl = `${appState.config.responseUrl}${chatId}`;
-                    const response = await fetch(responseUrl);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    
+                    const response = await makeApiCall(`${CONFIG.apiEndpoints.responseUrl}/${requestId}`);
                     
                     if (response.ok) {
                         const data = await response.json();
-                        return {
-                            ingredient: ingredient,
-                            status: data.status || 'Not Found',
-                            expiryDate: data.expiryDate || null,
-                            supplier: data.supplier || null,
-                            certificateId: data.certificateId || null
-                        };
+                        
+                        if (data.results && data.results.length > 0) {
+                            log(`Results received after ${attempt} attempts`);
+                            return data.results;
+                        } else if (data.status === 'processing') {
+                            log(`Still processing... (attempt ${attempt})`);
+                        } else {
+                            log(`Unexpected response: ${JSON.stringify(data)}`);
+                        }
+                    } else {
+                        log(`Polling attempt ${attempt} failed with status: ${response.status}`);
                     }
+                    
+                    // Increase delay for next attempt
+                    delay = Math.min(delay * backoffMultiplier, maxDelay);
+                    
                 } catch (error) {
-                    console.log(`Polling attempt ${attempt + 1} failed for ${ingredient}`);
+                    log(`Polling attempt ${attempt} error: ${error.message}`, 'error');
                 }
             }
             
-            // If polling fails, return timeout result
-            return {
-                ingredient: ingredient,
-                status: 'Timeout',
-                expiryDate: null,
-                supplier: null,
-                error: 'Response timeout - check if your webhook is processing correctly'
-            };
+            throw new Error(`Failed to get results after ${maxAttempts} attempts`);
         }
 
+        // Generate mock results for testing
+        function getMockResults(ingredients) {
+            return ingredients.map(ingredient => {
+                const mockData = MOCK_INGREDIENT_DATA[ingredient.toLowerCase()];
+                
+                if (mockData) {
+                    return {
+                        ingredient: ingredient,
+                        status: mockData.status,
+                        expiryDate: mockData.expiryDate,
+                        supplier: mockData.supplier,
+                        certificateId: mockData.certificateId
+                    };
+                } else {
+                    return {
+                        ingredient: ingredient,
+                        status: 'Not Found',
+                        expiryDate: 'N/A',
+                        supplier: 'Unknown',
+                        certificateId: 'N/A'
+                    };
+                }
+            });
+        }
+
+        // Display results in the table
         function displayResults(results) {
             const tbody = document.getElementById('resultsBody');
             tbody.innerHTML = '';
 
             results.forEach(result => {
                 const row = document.createElement('tr');
-                
-                const statusClass = getStatusClass(result.status);
-                const formattedDate = result.expiryDate ? formatDate(result.expiryDate) : 'N/A';
+                const statusClass = getStatusClass(result.status, result.expiryDate);
                 
                 row.innerHTML = `
-                    <td>${escapeHtml(result.ingredient)}</td>
-                    <td><span class="status-cell ${statusClass}">${escapeHtml(result.status)}</span></td>
-                    <td>${formattedDate}</td>
-                    <td>${escapeHtml(result.supplier || 'N/A')}</td>
+                    <td style="font-weight: 600;">${capitalizeFirst(result.ingredient)}</td>
+                    <td><span class="status-cell ${statusClass}">${result.status}</span></td>
+                    <td>${formatDate(result.expiryDate)}</td>
+                    <td>${result.supplier}</td>
                 `;
                 
                 tbody.appendChild(row);
             });
-            
-            document.getElementById('statsSection').style.display = 'grid';
+
+            document.getElementById('statsSection').style.display = 'block';
         }
 
-        function getStatusClass(status) {
-            switch (status.toLowerCase()) {
-                case 'certified': return 'status-certified';
-                case 'expiring': return 'status-expiring';
-                case 'expired': return 'status-expired';
-                case 'not found': return 'status-not-found';
-                default: return 'status-not-found';
+        // Get status class for styling
+        function getStatusClass(status, expiryDate) {
+            if (status === 'Certified') {
+                if (isExpiringWithin30Days(expiryDate)) {
+                    return 'status-expiring';
+                }
+                return 'status-certified';
+            } else if (status === 'Expired' || status === 'Not Found') {
+                return 'status-expired';
+            }
+            return 'status-not-found';
+        }
+
+        // Check if certificate is expiring within 30 days
+        function isExpiringWithin30Days(expiryDate) {
+            if (!expiryDate || expiryDate === 'N/A') return false;
+            
+            const expiry = new Date(expiryDate);
+            const now = new Date();
+            const diffTime = expiry.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return diffDays <= CONFIG.notificationThresholdDays && diffDays > 0;
+        }
+
+        // Update statistics display
+        function updateStats(results) {
+            const total = results.length;
+            const certified = results.filter(r => r.status === 'Certified' && !isExpiringWithin30Days(r.expiryDate)).length;
+            const expiring = results.filter(r => r.status === 'Certified' && isExpiringWithin30Days(r.expiryDate)).length;
+            const issues = results.filter(r => r.status !== 'Certified' || isExpiringWithin30Days(r.expiryDate)).length;
+
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('certifiedCount').textContent = certified;
+            document.getElementById('expiringCount').textContent = expiring;
+            document.getElementById('issuesCount').textContent = issues;
+        }
+
+        // Check for expiring certificates and show notifications
+        function checkForExpiringCertificates(results) {
+            const expiring = results.filter(r => isExpiringWithin30Days(r.expiryDate));
+            
+            if (expiring.length > 0) {
+                const ingredientNames = expiring.map(r => r.ingredient).join(', ');
+                showNotification(
+                    'Certificates Expiring Soon!',
+                    `${expiring.length} certificate(s) expiring within 30 days: ${ingredientNames}`
+                );
+                
+                showAlert(
+                    `Warning: ${expiring.length} certificate(s) expiring within 30 days`,
+                    'warning'
+                );
             }
         }
 
-        function formatDate(dateString) {
+        // Utility functions
+        function capitalizeFirst(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === 'N/A') return 'N/A';
+            
             try {
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-MY', {
+                return new Date(dateStr).toLocaleDateString('en-MY', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric'
                 });
-            } catch (error) {
-                return dateString;
+            } catch {
+                return dateStr;
             }
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function updateStats(results) {
-            const stats = {
-                total: results.length,
-                certified: 0,
-                expiring: 0,
-                issues: 0
-            };
-
-            const today = new Date();
-            const thresholdDate = new Date();
-            thresholdDate.setDate(today.getDate() + appState.config.notificationThresholdDays);
-
-            results.forEach(result => {
-                switch (result.status.toLowerCase()) {
-                    case 'certified':
-                        if (result.expiryDate) {
-                            const expiryDate = new Date(result.expiryDate);
-                            if (expiryDate <= thresholdDate && expiryDate > today) {
-                                stats.expiring++;
-                            } else {
-                                stats.certified++;
-                            }
-                        } else {
-                            stats.certified++;
-                        }
-                        break;
-                    case 'expired':
-                    case 'not found':
-                    case 'api error':
-                    case 'timeout':
-                    default:
-                        stats.issues++;
-                        break;
-                }
-            });
-
-            document.getElementById('totalCount').textContent = stats.total;
-            document.getElementById('certifiedCount').textContent = stats.certified;
-            document.getElementById('expiringCount').textContent = stats.expiring;
-            document.getElementById('issuesCount').textContent = stats.issues;
-        }
-
-        function checkForExpiringCertificates(results) {
-            const today = new Date();
-            const warningDate = new Date();
-            warningDate.setDate(today.getDate() + appState.config.notificationThresholdDays);
-
-            const expiring = results.filter(result => {
-                if (result.expiryDate && result.status.toLowerCase() === 'certified') {
-                    const expiryDate = new Date(result.expiryDate);
-                    return expiryDate <= warningDate && expiryDate > today;
-                }
-                return false;
-            });
-
-            if (expiring.length > 0) {
-                const ingredients = expiring.map(r => r.ingredient).join(', ');
-                showAlert(`Warning: ${expiring.length} ingredient(s) have certificates expiring within ${appState.config.notificationThresholdDays} days: ${ingredients}`, 'warning');
+        function setLoadingState(loading) {
+            const btn = document.querySelector('.check-btn');
+            const btnText = document.getElementById('checkBtnText');
+            
+            if (loading) {
+                btn.disabled = true;
+                btn.classList.add('loading');
+                btnText.textContent = 'Checking...';
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btnText.textContent = 'Check Ingredients';
             }
+        }
+
+        function showAlert(message, type) {
+            // Remove existing alerts
+            const existingAlerts = document.querySelectorAll('.alert:not(.alert-warning):not(#corsAlert)');
+            existingAlerts.forEach(alert => alert.remove());
+            
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = `<strong>${type === 'error' ? 'Error' : type === 'warning' ? 'Warning' : 'Success'}:</strong> ${message}`;
+            
+            const container = document.querySelector('.panel');
+            const statsSection = document.getElementById('statsSection');
+            container.insertBefore(alert, statsSection);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
         }
 
         function clearResults() {
@@ -1000,43 +1236,45 @@
                 </tr>
             `;
             document.getElementById('statsSection').style.display = 'none';
-            appState.savedInput = '';
-        }
-
-        function showAlert(message, type) {
-            const existingAlert = document.querySelector('.alert-message');
-            if (existingAlert) {
-                existingAlert.remove();
-            }
-
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type} alert-message`;
-            alert.textContent = message;
+            localStorage.removeItem('halal_checker_input');
             
-            const container = document.querySelector('.panel');
-            container.insertBefore(alert, container.firstChild);
+            // Clear any alerts
+            const alerts = document.querySelectorAll('.alert:not(.alert-warning):not(#corsAlert)');
+            alerts.forEach(alert => alert.remove());
             
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.remove();
-                }
-            }, 5000);
-        }
-
-        function autoSaveInput() {
-            const input = document.getElementById('ingredientInput');
-            input.addEventListener('input', function() {
-                appState.savedInput = this.value;
-            });
-            
-            // Restore saved input
-            input.value = appState.savedInput;
+            log('Results cleared');
         }
 
         // Chat functionality
+        let chatHistory = [];
+
         function initializeChat() {
-            const chatMessages = document.getElementById('chatMessages');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            log('Initializing chat...');
+            
+            // Load chat history from localStorage
+            const savedHistory = localStorage.getItem('halal_chat_history');
+            if (savedHistory) {
+                try {
+                    chatHistory = JSON.parse(savedHistory);
+                    displayChatHistory();
+                } catch (error) {
+                    log('Failed to load chat history: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function displayChatHistory() {
+            const messagesContainer = document.getElementById('chatMessages');
+            
+            // Clear existing messages except the initial welcome message
+            const welcomeMessage = messagesContainer.querySelector('.message-ai');
+            messagesContainer.innerHTML = '';
+            messagesContainer.appendChild(welcomeMessage);
+            
+            // Display chat history
+            chatHistory.forEach(message => {
+                displayMessage(message.content, message.isUser, false);
+            });
         }
 
         function handleChatKeyPress(event) {
@@ -1051,120 +1289,270 @@
             const message = input.value.trim();
             
             if (!message) return;
-
-            const sendBtn = document.querySelector('.send-btn');
-            const sendBtnText = document.getElementById('sendBtnText');
             
-            // Add user message
-            addMessage(message, 'user');
+            log(`Sending chat message: ${message}`);
+            
+            // Display user message
+            displayMessage(message, true);
             input.value = '';
             
-            // Show loading state
-            sendBtn.disabled = true;
-            sendBtnText.textContent = 'Thinking...';
+            // Add to history and save
+            chatHistory.push({ content: message, isUser: true, timestamp: Date.now() });
+            saveChatHistory();
             
-            // Add typing indicator
-            addTypingIndicator();
+            // Set loading state
+            setChatLoadingState(true);
             
             try {
-                // Simulate AI response (replace with actual AI API call)
-                const response = await getAIResponse(message);
-                removeTypingIndicator();
-                addMessage(response, 'ai');
+                let response;
+                
+                if (CONFIG.useMockData) {
+                    response = await getMockChatResponse(message);
+                } else {
+                    response = await getChatResponseAPI(message);
+                }
+                
+                // Display AI response
+                displayMessage(response, false);
+                
+                // Add to history and save
+                chatHistory.push({ content: response, isUser: false, timestamp: Date.now() });
+                saveChatHistory();
                 
             } catch (error) {
-                removeTypingIndicator();
-                addMessage('Sorry, I encountered an error. Please try again.', 'ai');
-                console.error('Chat error:', error);
+                log(`Chat error: ${error.message}`, 'error');
+                displayMessage('I apologize, but I\'m having trouble responding right now. Please try again later.', false);
             } finally {
-                sendBtn.disabled = false;
-                sendBtnText.textContent = 'Send';
+                setChatLoadingState(false);
             }
         }
 
-        function addMessage(content, sender) {
-            const chatMessages = document.getElementById('chatMessages');
+        function displayMessage(content, isUser, scrollToBottom = true) {
+            const messagesContainer = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message message-${sender}`;
+            messageDiv.className = `message ${isUser ? 'message-user' : 'message-ai'}`;
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
             contentDiv.textContent = content;
             
             messageDiv.appendChild(contentDiv);
-            chatMessages.appendChild(messageDiv);
+            messagesContainer.appendChild(messageDiv);
             
-            // Save to chat history
-            appState.chatHistory.push({ content, sender, timestamp: Date.now() });
-            
-            // Scroll to bottom
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            if (scrollToBottom) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
         }
 
-        function addTypingIndicator() {
-            const chatMessages = document.getElementById('chatMessages');
+        function setChatLoadingState(loading) {
+            const btn = document.querySelector('.send-btn');
+            const btnText = document.getElementById('sendBtnText');
+            const input = document.getElementById('chatInput');
+            
+            if (loading) {
+                btn.disabled = true;
+                input.disabled = true;
+                btnText.textContent = 'Sending...';
+                
+                // Show typing indicator
+                displayTypingIndicator();
+            } else {
+                btn.disabled = false;
+                input.disabled = false;
+                btnText.textContent = 'Send';
+                
+                // Remove typing indicator
+                removeTypingIndicator();
+            }
+        }
+
+        function displayTypingIndicator() {
+            const messagesContainer = document.getElementById('chatMessages');
             const typingDiv = document.createElement('div');
             typingDiv.className = 'message message-ai typing-indicator';
             typingDiv.id = 'typingIndicator';
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.innerHTML = '<span class="dots">●●●</span>';
+            contentDiv.innerHTML = 'AI is typing<span class="dots">...</span>';
             
             typingDiv.appendChild(contentDiv);
-            chatMessages.appendChild(typingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            messagesContainer.appendChild(typingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
         function removeTypingIndicator() {
-            const indicator = document.getElementById('typingIndicator');
-            if (indicator) {
-                indicator.remove();
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
             }
         }
 
-        // Simple AI response simulation (replace with actual AI API)
-        async function getAIResponse(message) {
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        function saveChatHistory() {
+            try {
+                // Keep only last 50 messages to prevent localStorage bloat
+                const recentHistory = chatHistory.slice(-50);
+                localStorage.setItem('halal_chat_history', JSON.stringify(recentHistory));
+                chatHistory = recentHistory;
+            } catch (error) {
+                log('Failed to save chat history: ' + error.message, 'error');
+            }
+        }
+
+        // Mock chat responses
+        async function getMockChatResponse(message) {
+            const responses = {
+                'halal': 'Halal refers to what is permissible according to Islamic law. In food, it means the food is prepared according to Islamic dietary guidelines.',
+                'haram': 'Haram refers to anything forbidden by Islamic law. Common haram ingredients include pork, alcohol, and certain food additives.',
+                'certificate': 'Halal certificates are issued by recognized Islamic organizations to verify that products comply with Islamic dietary laws.',
+                'gelatin': 'Gelatin can be halal or haram depending on its source. Gelatin from halal-slaughtered animals or fish is halal, while gelatin from pork is haram.',
+                'alcohol': 'Alcohol is generally considered haram in Islam. However, some scholars allow trace amounts that occur naturally in food processing.',
+                'chicken': 'Chicken is halal if it\'s slaughtered according to Islamic guidelines by a Muslim who says "Bismillah" (In the name of Allah).',
+                'beef': 'Beef is halal when the cattle is slaughtered according to Islamic law, ensuring the animal is healthy and the slaughter is performed correctly.'
+            };
             
             const lowerMessage = message.toLowerCase();
             
-            // Simple keyword-based responses
-            if (lowerMessage.includes('halal') && lowerMessage.includes('certificate')) {
-                return "Halal certificates are issued by recognized Islamic bodies like JAKIM in Malaysia. They verify that products comply with Islamic dietary laws. Certificates typically have expiry dates and need renewal.";
-            } else if (lowerMessage.includes('ingredient') && (lowerMessage.includes('check') || lowerMessage.includes('verify'))) {
-                return "You can use the ingredient checker on the left to verify halal status. Simply enter ingredient names one per line and click 'Check Ingredients'. The system will show certification status, expiry dates, and suppliers.";
-            } else if (lowerMessage.includes('gelatin') || lowerMessage.includes('gelatine')) {
-                return "Gelatin can be halal or haram depending on its source. Halal gelatin is derived from halal animals (like cattle slaughtered according to Islamic law) or from fish. Pork-derived gelatin is haram.";
-            } else if (lowerMessage.includes('alcohol') || lowerMessage.includes('ethanol')) {
-                return "Alcohol in food products is a complex topic. Small amounts used in processing (like vanilla extract) may be permissible if the final product doesn't contain intoxicating amounts. However, many scholars prefer alcohol-free alternatives.";
-            } else if (lowerMessage.includes('lecithin')) {
-                return "Lecithin is generally halal when derived from plants (like soy lecithin). However, some lecithin may be derived from egg yolks, which is also halal. The source should be verified through proper certification.";
-            } else if (lowerMessage.includes('emulsifier') || lowerMessage.includes('stabilizer')) {
-                return "Emulsifiers and stabilizers can be halal or haram depending on their source. Plant-based ones like lecithin are typically halal. Always check for proper halal certification to be sure.";
-            } else if (lowerMessage.includes('expires') || lowerMessage.includes('expiry') || lowerMessage.includes('renewal')) {
-                return "Halal certificates have expiry dates to ensure ongoing compliance. Companies must renew their certificates before expiry. Our system flags ingredients with certificates expiring within 30 days.";
-            } else if (lowerMessage.includes('jakim')) {
-                return "JAKIM (Department of Islamic Development Malaysia) is Malaysia's main halal certification body. Their certificates are widely recognized internationally and indicate strict compliance with halal standards.";
-            } else if (lowerMessage.includes('cross contamination') || lowerMessage.includes('cross-contamination')) {
-                return "Cross-contamination with haram substances is a serious concern in halal food production. Certified facilities have strict protocols to prevent contact with pork, alcohol, and other non-halal substances.";
-            } else {
-                return "I'm here to help with halal ingredient questions! You can ask me about specific ingredients, certification processes, or use the ingredient checker to verify halal status. What would you like to know?";
+            // Find matching keywords
+            for (const [keyword, response] of Object.entries(responses)) {
+                if (lowerMessage.includes(keyword)) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+                    return response;
+                }
+            }
+            
+            // Default response
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+            return 'I\'m here to help with halal ingredient questions. You can ask me about specific ingredients, certification processes, or Islamic dietary guidelines. What would you like to know?';
+        }
+
+        // API chat response
+        async function getChatResponseAPI(message) {
+            log('Sending chat message to API...');
+            
+            const requestData = {
+                message: message,
+                chatId: CONFIG.chatId,
+                context: 'halal_ingredients',
+                timestamp: Date.now()
+            };
+            
+            try {
+                const response = await makeApiCall(CONFIG.apiEndpoints.primary + '/chat', {
+                    method: 'POST',
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Chat API responded with status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.response) {
+                    return data.response;
+                } else {
+                    throw new Error('No response received from chat API');
+                }
+                
+            } catch (error) {
+                log(`Chat API error: ${error.message}`, 'error');
+                throw error;
             }
         }
 
-        // Global error handler
-        window.addEventListener('error', function(event) {
-            console.error('Global error:', event.error);
-            showAlert('An unexpected error occurred. Please refresh the page if problems persist.', 'error');
+        // Export functionality (bonus feature)
+        function exportResults() {
+            const results = Array.from(document.querySelectorAll('#resultsBody tr')).map(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length === 1) return null; // Skip empty state row
+                
+                return {
+                    Ingredient: cells[0].textContent,
+                    Status: cells[1].textContent,
+                    ExpiryDate: cells[2].textContent,
+                    Supplier: cells[3].textContent
+                };
+            }).filter(Boolean);
+            
+            if (results.length === 0) {
+                showAlert('No results to export', 'warning');
+                return;
+            }
+            
+            const csv = convertToCSV(results);
+            downloadFile(csv, 'halal-ingredient-check-results.csv', 'text/csv');
+            
+            log(`Exported ${results.length} results to CSV`);
+        }
+
+        function convertToCSV(data) {
+            if (data.length === 0) return '';
+            
+            const headers = Object.keys(data[0]);
+            const csvHeaders = headers.join(',');
+            
+            const csvRows = data.map(row => 
+                headers.map(header => {
+                    const value = row[header];
+                    // Escape quotes and wrap in quotes if contains comma
+                    return value.includes(',') ? `"${value.replace(/"/g, '""')}"` : value;
+                }).join(',')
+            );
+            
+            return [csvHeaders, ...csvRows].join('\n');
+        }
+
+        function downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            URL.revokeObjectURL(url);
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            // Ctrl+Enter to check ingredients
+            if (event.ctrlKey && event.key === 'Enter') {
+                event.preventDefault();
+                checkIngredients();
+            }
+            
+            // Ctrl+Shift+C to clear results
+            if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+                event.preventDefault();
+                clearResults();
+            }
+            
+            // Ctrl+E to export results
+            if (event.ctrlKey && event.key === 'e') {
+                event.preventDefault();
+                exportResults();
+            }
         });
 
-        // Global unhandled promise rejection handler
-        window.addEventListener('unhandledrejection', function(event) {
-            console.error('Unhandled promise rejection:', event.reason);
-            showAlert('A network error occurred. Please check your connection and try again.', 'error');
+        // Add export button to the UI
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttonGroup = document.querySelector('.button-group');
+            const exportBtn = document.createElement('button');
+            exportBtn.innerHTML = '📥 Export';
+            exportBtn.onclick = exportResults;
+            exportBtn.style.background = '#17a2b8';
+            exportBtn.style.color = 'white';
+            buttonGroup.appendChild(exportBtn);
         });
+
+        log('Halal Ingredient Checker fully loaded and ready!');
     </script>
+    <script src="main.js"></script>
 </body>
 </html>
