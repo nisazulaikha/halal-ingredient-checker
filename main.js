@@ -5,15 +5,14 @@
 
 class HalalIngredientChecker {
     constructor() {
-        // Configuration with multiple fallback options
+        // Configuration with updated endpoints and settings
         this.config = {
             apiEndpoints: {
-                primary: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/ingredient-check',
-                fallback: 'https://your-cors-proxy.com/api',
-                proxyPrefix: 'https://cors-anywhere.herokuapp.com/',
-                responseUrl: 'https://c14a-27-125-240-61.ngrok-free.app/webhook/response-webhook/response'
+                primary: 'https://fb62-27-125-241-114.ngrok-free.app/webhook/ingredient-check',
+                responseUrl: 'https://fb62-27-125-241-114.ngrok-free.app/webhook/f3f51804-fafc-4103-bff9-4dc5ab97ff2f/response',
+                chatResponseUrl: 'https://fb62-27-125-241-114.ngrok-free.app/webhook/bb06b7cf-8a49-4f1e-ba44-ca85271eeaf6/response/chat'
             },
-            useMockData: true, // Default to mock data to avoid CORS issues
+            useMockData: false, // Set to false for live data, adjust if needed
             notificationThresholdDays: 30,
             chatId: 'session_' + Date.now(),
             polling: {
@@ -23,7 +22,7 @@ class HalalIngredientChecker {
                 maxDelay: 5000
             }
         };
-
+        
         // Debug logging
         this.debugLog = [];
         
@@ -157,12 +156,12 @@ class HalalIngredientChecker {
         const mockDataCheckbox = document.getElementById('useMockData');
         const apiUrlInput = document.getElementById('apiUrl');
         const responseUrlInput = document.getElementById('responseUrl');
+        const chatResponseUrlInput = document.getElementById('chatResponseUrl');
         
         if (mockDataCheckbox) {
             mockDataCheckbox.addEventListener('change', (e) => {
                 this.config.useMockData = e.target.checked;
                 this.log(`Mock data mode: ${e.target.checked ? 'enabled' : 'disabled'}`);
-                this.updateCorsAlert();
             });
         }
         
@@ -180,36 +179,24 @@ class HalalIngredientChecker {
             });
         }
         
-        this.updateCorsAlert();
+        if (chatResponseUrlInput) {
+            chatResponseUrlInput.addEventListener('input', (e) => {
+                this.config.apiEndpoints.chatResponseUrl = e.target.value;
+                this.log(`Chat Response URL updated: ${e.target.value}`);
+            });
+        }
     }
 
     updateConfigFromUI() {
         const mockDataCheckbox = document.getElementById('useMockData');
         const apiUrlInput = document.getElementById('apiUrl');
         const responseUrlInput = document.getElementById('responseUrl');
+        const chatResponseUrlInput = document.getElementById('chatResponseUrl');
         
         if (mockDataCheckbox) this.config.useMockData = mockDataCheckbox.checked;
         if (apiUrlInput) this.config.apiEndpoints.primary = apiUrlInput.value;
         if (responseUrlInput) this.config.apiEndpoints.responseUrl = responseUrlInput.value;
-    }
-
-    updateCorsAlert() {
-        const corsAlert = document.getElementById('corsAlert');
-        if (!corsAlert) return;
-
-        if (this.config.useMockData) {
-            corsAlert.innerHTML = `
-                <strong>Mock Mode:</strong> Using sample data. Uncheck "Use Mock Data" to connect to your API.
-                <br><small>Make sure your backend has CORS headers configured properly.</small>
-            `;
-            corsAlert.className = 'alert alert-warning';
-        } else {
-            corsAlert.innerHTML = `
-                <strong>Live Mode:</strong> Attempting to connect to your API. 
-                If you see CORS errors, enable mock mode or configure CORS headers.
-            `;
-            corsAlert.className = 'alert alert-success';
-        }
+        if (chatResponseUrlInput) this.config.apiEndpoints.chatResponseUrl = chatResponseUrlInput.value;
     }
 
     // Enhanced API call with better error handling
@@ -346,7 +333,7 @@ class HalalIngredientChecker {
 
     // Auto-save input
     autoSaveInput() {
-        const input = document.getElementById('ingredientInput');
+        const input = document.getElementById('ingredientsInput');
         if (!input) return;
 
         const savedInput = localStorage.getItem('halal_checker_input');
@@ -362,7 +349,7 @@ class HalalIngredientChecker {
 
     // Main ingredient checking function
     async checkIngredients() {
-        const input = document.getElementById('ingredientInput');
+        const input = document.getElementById('ingredientsInput');
         if (!input) return;
 
         const ingredients = input.value
@@ -414,59 +401,60 @@ class HalalIngredientChecker {
 
     // API ingredient checking
     async checkIngredientsAPI(ingredients) {
-    this.log('Starting API ingredient check...');
-    const requestData = {
-        ingredients,
-        chatId: this.config.chatId,
-        responseUrl: this.config.apiEndpoints.responseUrl,
-        timestamp: Date.now()
-    };
-    try {
-        const response = await this.makeApiCall(this.config.apiEndpoints.primary, {
-            method: 'POST',
-            body: JSON.stringify(requestData)
-        });
-        const responseData = await response.json();
-        if (!responseData.success) {
-            throw new Error(responseData.error || 'API error');
+        this.log('Starting API ingredient check...');
+        const requestData = {
+            ingredients,
+            chatId: this.config.chatId,
+            responseUrl: this.config.apiEndpoints.responseUrl,
+            timestamp: Date.now()
+        };
+        try {
+            const response = await this.makeApiCall(this.config.apiEndpoints.primary, {
+                method: 'POST',
+                body: JSON.stringify(requestData)
+            });
+            const responseData = await response.json();
+            if (!responseData.success) {
+                throw new Error(responseData.error || 'API error');
+            }
+            this.log('Received API response, starting polling for results...');
+            return await this.pollForResults(responseData.chatId || this.config.chatId);
+        } catch (error) {
+            this.log(`API call failed: ${error.message}`, 'error');
+            this.showAlert(error.message, 'error');
+            throw error;
         }
-        this.log('Received API response, starting polling for results...');
-        return await this.pollForResults(responseData.chatId || this.config.chatId);
-    } catch (error) {
-        this.log(`API call failed: ${error.message}`, 'error');
-        this.showAlert(error.message, 'error');
-        throw error;
     }
-}
 
     // Poll for results from the API
     async pollForResults(requestId) {
-    const { maxAttempts, initialDelay, backoffMultiplier, maxDelay } = this.config.polling;
-    let delay = initialDelay;
-    this.log(`Starting to poll for results (ID: ${requestId})`);
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            this.log(`Polling attempt ${attempt}/${maxAttempts} (delay: ${delay}ms)`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            const response = await this.makeApiCall(`${this.config.apiEndpoints.responseUrl}/${requestId}`);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.value) {
-                    const parsedData = JSON.parse(data.value);
-                    if (parsedData.results && parsedData.results.length > 0) {
-                        this.log(`Results received after ${attempt} attempts`);
-                        return parsedData.results;
+        const { maxAttempts, initialDelay, backoffMultiplier, maxDelay } = this.config.polling;
+        let delay = initialDelay;
+        this.log(`Starting to poll for results (ID: ${requestId})`);
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                this.log(`Polling attempt ${attempt}/${maxAttempts} (delay: ${delay}ms)`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                const response = await this.makeApiCall(`${this.config.apiEndpoints.responseUrl}/${requestId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.value) {
+                        const parsedData = JSON.parse(data.value);
+                        if (parsedData.results && parsedData.results.length > 0) {
+                            this.log(`Results received after ${attempt} attempts`);
+                            return parsedData.results;
+                        }
+                        this.log(`Still processing... (attempt ${attempt})`);
                     }
-                    this.log(`Still processing... (attempt ${attempt})`);
                 }
+                delay = Math.min(delay * backoffMultiplier, maxDelay);
+            } catch (error) {
+                this.log(`Polling attempt ${attempt} error: ${error.message}`, 'error');
             }
-            delay = Math.min(delay * backoffMultiplier, maxDelay);
-        } catch (error) {
-            this.log(`Polling attempt ${attempt} error: ${error.message}`, 'error');
         }
+        throw new Error(`Failed to get results after ${maxAttempts} attempts`);
     }
-    throw new Error(`Failed to get results after ${maxAttempts} attempts`);
-}
+
     // Generate mock results for testing
     getMockResults(ingredients) {
         return ingredients.map(ingredient => {
@@ -494,26 +482,26 @@ class HalalIngredientChecker {
 
     // Display results in the table
     displayResults(results) {
-    const tbody = document.getElementById('resultsBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    results.forEach(result => {
-        const row = document.createElement('tr');
-        const statusClass = this.getStatusClass(result.status, result.expiryDate);
-        row.innerHTML = `
-            <td style="font-weight: 600;">${this.capitalizeFirst(result.ingredient)}</td>
-            <td><span class="status-cell ${statusClass}">${result.status}</span></td>
-            <td>${this.formatDate(result.expiryDate)}</td>
-            <td>${result.supplier}</td>
-            <td>${result.certificateId || 'N/A'}</td>
-        `;
-        tbody.appendChild(row);
-    });
-    const statsSection = document.getElementById('statsSection');
-    if (statsSection) {
-        statsSection.style.display = 'block';
+        const tbody = document.getElementById('resultsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        results.forEach(result => {
+            const row = document.createElement('tr');
+            const statusClass = this.getStatusClass(result.status, result.expiryDate);
+            row.innerHTML = `
+                <td style="font-weight: 600;">${this.capitalizeFirst(result.ingredient)}</td>
+                <td><span class="status-cell ${statusClass}">${result.status}</span></td>
+                <td>${this.formatDate(result.expiryDate)}</td>
+                <td>${result.supplier}</td>
+                <td>${result.certificateId || 'N/A'}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        const statsSection = document.getElementById('statsSection');
+        if (statsSection) {
+            statsSection.style.display = 'block';
+        }
     }
-}
 
     // Get status class for styling
     getStatusClass(status, expiryDate) {
@@ -616,7 +604,7 @@ class HalalIngredientChecker {
 
     showAlert(message, type) {
         // Remove existing alerts
-        const existingAlerts = document.querySelectorAll('.alert:not(.alert-warning):not(#corsAlert)');
+        const existingAlerts = document.querySelectorAll('.alert:not(.alert-warning)');
         existingAlerts.forEach(alert => alert.remove());
         
         const alert = document.createElement('div');
@@ -638,7 +626,7 @@ class HalalIngredientChecker {
     }
 
     clearResults() {
-        const input = document.getElementById('ingredientInput');
+        const input = document.getElementById('ingredientsInput');
         const resultsBody = document.getElementById('resultsBody');
         const statsSection = document.getElementById('statsSection');
 
@@ -661,7 +649,7 @@ class HalalIngredientChecker {
         localStorage.removeItem('halal_checker_input');
         
         // Clear any alerts
-        const alerts = document.querySelectorAll('.alert:not(.alert-warning):not(#corsAlert)');
+        const alerts = document.querySelectorAll('.alert:not(.alert-warning)');
         alerts.forEach(alert => alert.remove());
         
         this.log('Results cleared');
@@ -843,54 +831,54 @@ class HalalIngredientChecker {
     }
 
     async getChatResponseAPI(message) {
-    this.log('Sending chat message to API...');
-    const requestData = {
-        message,
-        chatId: this.config.chatId,
-        responseUrl: this.config.apiEndpoints.responseUrl + '/chat',
-        timestamp: Date.now()
-    };
-    try {
-        const response = await this.makeApiCall(this.config.apiEndpoints.primary + '/chat', {
-            method: 'POST',
-            body: JSON.stringify(requestData)
-        });
-        const responseData = await response.json();
-        if (!responseData.success) {
-            throw new Error(responseData.error || 'Chat API error');
-        }
-        return await this.pollForChatResponse(responseData.chatId || this.config.chatId);
-    } catch (error) {
-        this.log(`Chat API call failed: ${error.message}`, 'error');
-        throw error;
-    }
-}
-
-async pollForChatResponse(requestId) {
-    const { maxAttempts, initialDelay, backoffMultiplier, maxDelay } = this.config.polling;
-    let delay = initialDelay;
-    this.log(`Polling for chat response (ID: ${requestId})`);
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        this.log('Sending chat message to API...');
+        const requestData = {
+            message,
+            chatId: this.config.chatId,
+            responseUrl: this.config.apiEndpoints.chatResponseUrl,
+            timestamp: Date.now()
+        };
         try {
-            await new Promise(resolve => setTimeout(resolve, delay));
-            const response = await this.makeApiCall(`${this.config.apiEndpoints.responseUrl}/chat/${requestId}`);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.value) {
-                    const parsedData = JSON.parse(data.value);
-                    if (parsedData.response) {
-                        this.log(`Chat response received after ${attempt} attempts`);
-                        return parsedData.response;
+            const response = await this.makeApiCall(this.config.apiEndpoints.primary + '/chat', {
+                method: 'POST',
+                body: JSON.stringify(requestData)
+            });
+            const responseData = await response.json();
+            if (!responseData.success) {
+                throw new Error(responseData.error || 'Chat API error');
+            }
+            return await this.pollForChatResponse(responseData.chatId || this.config.chatId);
+        } catch (error) {
+            this.log(`Chat API call failed: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
+    async pollForChatResponse(requestId) {
+        const { maxAttempts, initialDelay, backoffMultiplier, maxDelay } = this.config.polling;
+        let delay = initialDelay;
+        this.log(`Polling for chat response (ID: ${requestId})`);
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                const response = await this.makeApiCall(`${this.config.apiEndpoints.chatResponseUrl}/${requestId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.value) {
+                        const parsedData = JSON.parse(data.value);
+                        if (parsedData.response) {
+                            this.log(`Chat response received after ${attempt} attempts`);
+                            return parsedData.response;
+                        }
                     }
                 }
+                delay = Math.min(delay * backoffMultiplier, maxDelay);
+            } catch (error) {
+                this.log(`Chat polling attempt ${attempt} error: ${error.message}`, 'error');
             }
-            delay = Math.min(delay * backoffMultiplier, maxDelay);
-        } catch (error) {
-            this.log(`Chat polling attempt ${attempt} error: ${error.message}`, 'error');
         }
+        throw new Error(`Failed to get chat response after ${maxAttempts} attempts`);
     }
-    throw new Error(`Failed to get chat response after ${maxAttempts} attempts`);
-}
 
     saveChatHistory() {
         try {
@@ -971,45 +959,45 @@ async pollForChatResponse(requestId) {
     }
 
     exportResults() {
-    const resultsBody = document.getElementById('resultsBody');
-    if (!resultsBody || resultsBody.children.length === 0) {
-        this.showAlert('No results to export', 'warning');
-        return;
-    }
-    const results = [];
-    const rows = resultsBody.querySelectorAll('tr');
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length === 5) {
-            results.push({
-                ingredient: cells[0].textContent.trim(),
-                status: cells[1].textContent.trim(),
-                expiryDate: cells[2].textContent.trim(),
-                supplier: cells[3].textContent.trim(),
-                certificateId: cells[4].textContent.trim()
-            });
+        const resultsBody = document.getElementById('resultsBody');
+        if (!resultsBody || resultsBody.children.length === 0) {
+            this.showAlert('No results to export', 'warning');
+            return;
         }
-    });
-    if (results.length === 0) {
-        this.showAlert('No valid results to export', 'warning');
-        return;
+        const results = [];
+        const rows = resultsBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length === 5) {
+                results.push({
+                    ingredient: cells[0].textContent.trim(),
+                    status: cells[1].textContent.trim(),
+                    expiryDate: cells[2].textContent.trim(),
+                    supplier: cells[3].textContent.trim(),
+                    certificateId: cells[4].textContent.trim()
+                });
+            }
+        });
+        if (results.length === 0) {
+            this.showAlert('No valid results to export', 'warning');
+            return;
+        }
+        const csvContent = [
+            ['Ingredient', 'Status', 'Expiry Date', 'Supplier', 'Certificate ID'],
+            ...results.map(r => [r.ingredient, r.status, r.expiryDate, r.supplier, r.certificateId])
+        ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `halal_ingredients_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        this.showAlert('Results exported successfully!', 'success');
+        this.log('Results exported to CSV');
     }
-    const csvContent = [
-        ['Ingredient', 'Status', 'Expiry Date', 'Supplier', 'Certificate ID'],
-        ...results.map(r => [r.ingredient, r.status, r.expiryDate, r.supplier, r.certificateId])
-    ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `halal_ingredients_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    this.showAlert('Results exported successfully!', 'success');
-    this.log('Results exported to CSV');
-}
 
     // Utility method to get current stats
     getCurrentStats() {
@@ -1026,7 +1014,6 @@ async pollForChatResponse(requestId) {
     // Method to refresh configuration
     refreshConfig() {
         this.updateConfigFromUI();
-        this.updateCorsAlert();
         this.log('Configuration refreshed');
     }
 
